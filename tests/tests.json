@@ -1,0 +1,43 @@
+[
+  {
+    "name": "Pair a TV and send a routed title command",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": ["live Firebase TV pairing", "platform routing", "TV command schema"],
+    "description": "Verifies a paired TV receives a command containing platform, route status, and launch-target metadata.",
+    "steps": ["Open Connect a TV", "Select Google TV and complete pairing", "Send a saved title to the paired TV"],
+    "expected": "The received command identifies Google TV and reports that a licensed native deep-link is needed."
+  },
+  {
+    "name": "Open the account and trial setup on mobile",
+    "viewport": "mobile",
+    "covers": ["account entry point", "email/password authentication form", "72-hour trial messaging"],
+    "description": "Verifies the new account layer is accessible without disrupting the mobile organizer experience.",
+    "steps": ["Open the Stream Command account control", "Review the account creation fields", "Review the trial messaging"],
+    "expected": "The account form is visible with email and password fields, and the planned 72-hour premium trial is clearly described."
+  },
+  {
+    "name": "Live TV receiver reacts to phone commands",
+    "viewport": "desktop",
+    "covers": ["dedicated TV receiver mode", "live Firestore command listener", "automatic receiver launch", "title handoff", "receiver fallback"],
+    "description": "Verifies the TV receiver stays live after pairing and renders a phone-sent title command with the correct route state.",
+    "steps": ["Open Connect a TV and choose This screen is the TV", "Select Browser / TV web and complete phone pairing", "Send Yellowstone from the paired phone"],
+    "expected": "The receiver changes from Ready when you are to the Yellowstone command and automatically navigates to the provider fallback when a launch target is available."
+  },
+  {
+    "name": "Preserve provider catalog and watchlist",
+    "viewport": "desktop",
+    "covers": ["provider catalog", "service connection", "watchlist", "where-to-watch demo"],
+    "description": "Verifies the account foundation leaves the core organizer workflows available.",
+    "steps": ["Open My Services", "Connect a provider", "Open My Watchlist and view Where to watch"],
+    "expected": "Provider selection, watchlist titles, and Where to watch remain available."
+  },
+  {
+    "name": "Reject invalid account credentials before submission",
+    "viewport": "mobile",
+    "covers": ["account validation", "invalid authentication input guardrail"],
+    "description": "Verifies incomplete account credentials are blocked before a Firebase authentication request is attempted.",
+    "steps": ["Open the account control", "Enter an email and a password shorter than 6 characters", "Submit the account form"],
+    "expected": "A validation message explains the password requirement and the account request is not submitted."
+  }
+]
