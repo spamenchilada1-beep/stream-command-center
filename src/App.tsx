@@ -293,13 +293,20 @@ function App() {
     const provider = providers.find(item => item.id === id);
     if (!provider) return;
     const connection = getProviderConnection(id);
-    if (connection.status !== 'configured') {
-      setConnectionMessage(
-        `${provider.name} is in the connection layer, but its provider authentication adapter is not configured yet.`
-      );
+
+    if (connected.includes(id)) {
+      setConnected(current => current.filter(item => item !== id));
+      setConnectionMessage(`${provider.name} removed from your Stream Command services.`);
       return;
     }
-    setConnected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+
+    setConnected(current => [...current, id]);
+    if (connection.launchUrl) {
+      window.open(connection.launchUrl, '_blank', 'noopener,noreferrer');
+      setConnectionMessage(`${provider.name} added. Any provider sign-in happens on the provider's own site.`);
+    } else {
+      setConnectionMessage(`${provider.name} added to your Stream Command services.`);
+    }
   };
 
   const submitAccount = async () => {
@@ -432,7 +439,7 @@ function App() {
                 </div>
                 <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-7">
                   <div className="flex items-center justify-between"><p className="text-sm font-semibold">Your setup</p><span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs text-emerald-300">Catalog v1</span></div>
-                  <div className="mt-7 space-y-4"><Stat label="Providers cataloged" value={String(providers.length)} /><Stat label="Services connected" value={String(connected.length)} /><Stat label="Saved to watch" value={String(watchlist.length)} /></div>
+                  <div className="mt-7 space-y-4"><Stat label="Providers cataloged" value={String(providers.length)} /><Stat label="Services added" value={String(connected.length)} /><Stat label="Saved to watch" value={String(watchlist.length)} /></div>
                   <button onClick={() => setActiveTab('services')} className="mt-7 flex w-full items-center justify-between rounded-2xl border border-white/10 p-4 text-sm hover:bg-white/5">Explore provider catalog <ChevronRight size={17} /></button>
                 </div>
               </section>
@@ -443,7 +450,7 @@ function App() {
           {activeTab === 'services' && (
             <section>
               <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Provider catalog • {providers.length} entries</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Services</h1><p className="mt-2 max-w-2xl text-white/45">Connect what you use. The catalog separates subscription, free, live TV, TVE, rental/purchase, library, specialty, and Prime Video channel relationships.</p></div>
-              <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"><Search size={18} className="text-white/35" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find Netflix, MGM+, Peacock, Tubi..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/25" /></div>
+              <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"><Search size={18} className="text-white/35" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find Netflix, MGM+, Peacock, Tubi..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/25" /></div>
               <div className="mb-5 flex gap-2 overflow-x-auto pb-1">{categories.map(item => <button key={item} onClick={() => setCategory(item)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs ${category === item ? 'border-white bg-white text-black' : 'border-white/10 text-white/45 hover:text-white'}`}>{item}</button>)}</div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">                {visibleProviders.map(provider => {
                   const isConnected = connected.includes(provider.id);
