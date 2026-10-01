@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, MonitorPlay, Plus, QrCode, Search, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
@@ -335,7 +335,7 @@ function App() {
     if (!auth.currentUser) await signInAnonymously(auth);
     await setDoc(doc(db, 'pairingSessions', code), {
       status: 'waiting',
-      tvName: `${tvPlatforms.find(item => item.id === platform)?.name || 'TV'} • Living Room`,
+      tvName: `${tvPlatforms.find(item => item.id === platform)?.name || 'TV'} â€¢ Living Room`,
       platform,
       tvUserId: auth.currentUser?.uid || null,
       titleId: title?.id || null,
@@ -430,13 +430,13 @@ function App() {
 
           {activeTab === 'services' && (
             <section>
-              <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Provider catalog • {providers.length} entries</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Services</h1><p className="mt-2 max-w-2xl text-white/45">Connect what you use. The catalog separates subscription, free, live TV, TVE, rental/purchase, library, specialty, and Prime Video channel relationships.</p></div>
+              <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Provider catalog â€¢ {providers.length} entries</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Services</h1><p className="mt-2 max-w-2xl text-white/45">Connect what you use. The catalog separates subscription, free, live TV, TVE, rental/purchase, library, specialty, and Prime Video channel relationships.</p></div>
               <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"><Search size={18} className="text-white/35" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find Netflix, MGM+, Peacock, Tubi..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/25" /></div>
               <div className="mb-5 flex gap-2 overflow-x-auto pb-1">{categories.map(item => <button key={item} onClick={() => setCategory(item)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs ${category === item ? 'border-white bg-white text-black' : 'border-white/10 text-white/45 hover:text-white'}`}>{item}</button>)}</div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">                {visibleProviders.map(provider => {
                   const isConnected = connected.includes(provider.id);
                   return <button key={provider.id} onClick={() => connectProvider(provider.id)} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-left hover:bg-white/[0.06]">
-                    <div className="flex items-start justify-between gap-3"><span><span className="block font-medium">{provider.name}</span><span className="mt-1 block text-xs text-white/35">{provider.category}{provider.host ? ` • via ${provider.host}` : ''}</span></span>{isConnected ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 text-white/35"><Plus size={16} /></span>}</div>
+                    <div className="flex items-start justify-between gap-3"><span><span className="block font-medium">{provider.name}</span><span className="mt-1 block text-xs text-white/35">{provider.category}{provider.host ? ` â€¢ via ${provider.host}` : ''}</span></span>{isConnected ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 text-white/35"><Plus size={16} /></span>}</div>
                     <div className="mt-3 flex flex-wrap gap-1.5">{provider.devices.map(device => <span key={device} className="rounded-md bg-white/5 px-1.5 py-1 text-[9px] text-white/35">{device}</span>)}</div>
                     {provider.note && <p className="mt-2 text-[10px] text-cyan-300/60">{provider.note}</p>}
                   </button>;
@@ -449,90 +449,13 @@ function App() {
           {activeTab === 'watchlist' && <section><div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} /></section>}
         </main>
 
-        <footer className="mt-12 border-t border-white/10 pt-5 text-xs text-white/25">Working prototype • Provider-agnostic architecture • Catalog metadata only for now</footer>
+        <footer className="mt-12 border-t border-white/10 pt-5 text-xs text-white/25">Working prototype â€¢ Provider-agnostic architecture â€¢ Catalog metadata only for now</footer>
       </div>
-
       {showAccount && <Modal title={accountMode === 'signed-in' ? 'Your Stream Command account' : 'Save your streaming setup'} onClose={() => { setShowAccount(false); setAccountMessage(''); }}>
         {accountMode === 'signed-in' ? <>
           <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">Signed in</p><p className="mt-1 font-medium">{accountEmail}</p><p className="mt-2 text-sm leading-6 text-white/45">Your services and watchlist sync to your account. The app can keep you signed in on this device.</p></div>
           {trialEndsAt && <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">Premium trial</p><p className="mt-1 font-medium">72 hours</p><p className="mt-2 text-xs text-white/40">Trial window ends {new Date(trialEndsAt).toLocaleString()}.</p></div>}
-          <p className="mt-4 text-xs text-white/30">Subscription billing is not enabled yet. This account layer is preparing the trial → subscription flow.</p>
-        </> : <>
-          <p className="mb-4 text-sm leading-6 text-white/45">Create an account once and keep your services and watchlist with you. If you are currently using anonymous mode, we upgrade that same Firebase identity so the TV pairing foundation stays intact.</p>
-          <div className="space-y-3">
-            <input value={accountForm.email} onChange={event => setAccountForm(current => ({ ...current, email: event.target.value }))} type="email" placeholder="Email address" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
-            <input value={accountForm.password} onChange={event => setAccountForm(current => ({ ...current, password: event.target.value }))} type="password" placeholder="Password (6+ characters)" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
-  return (
-    <div className="min-h-screen bg-[#08090d] text-white">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-10 sm:px-6">
-        <header className="flex items-center justify-between py-5">
-          <button onClick={() => setActiveTab('home')} className="flex items-center gap-3 text-left">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-black"><MonitorPlay size={21} /></span>
-            <span><span className="block text-sm font-semibold tracking-tight">STREAM COMMAND</span><span className="block text-[10px] uppercase tracking-[0.24em] text-white/40">your watch universe</span></span>
-          </button>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowAccount(true)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10">{accountMode === 'signed-in' ? (accountEmail || 'Account') : 'Sign in'}</button>
-            <button onClick={() => setShowConnect(true)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10">+ Add service</button>
-          </div>
-        </header>
-
-        <main className="flex-1">
-          <nav className="mb-8 flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-            {[['home', 'Command Center'], ['services', 'My Services'], ['watchlist', 'My Watchlist']].map(([id, label]) => (
-              <button key={id} onClick={() => setActiveTab(id as typeof activeTab)} className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm transition ${activeTab === id ? 'bg-white text-black' : 'text-white/55 hover:text-white'}`}>{label}</button>
-            ))}          </nav>
-
-          {activeTab === 'home' && (
-            <>
-              <section className="grid gap-5 lg:grid-cols-[1.5fr_.8fr]">
-                <div className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-indigo-950 via-[#11131c] to-[#0b0c11] p-7 sm:p-10">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Everything you want to watch</p>
-                  <h1 className="max-w-2xl text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">Stop hunting across apps.</h1>
-                  <p className="mt-5 max-w-xl text-base leading-7 text-white/55">Keep your services, saved shows, and next watch in one command center. Then send what you want to watch from your phone to the TV.</p>
-                  <div className="mt-8 flex flex-wrap gap-3">
-                    <button onClick={() => setShowConnect(true)} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black">Connect services</button>
-                    <button onClick={() => setShowTv(true)} className="flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"><QrCode size={17} /> Connect a TV</button>
-                  </div>
-                </div>
-                <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-7">
-                  <div className="flex items-center justify-between"><p className="text-sm font-semibold">Your setup</p><span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs text-emerald-300">Catalog v1</span></div>
-                  <div className="mt-7 space-y-4"><Stat label="Providers cataloged" value={String(providers.length)} /><Stat label="Services connected" value={String(connected.length)} /><Stat label="Saved to watch" value={String(watchlist.length)} /></div>
-                  <button onClick={() => setActiveTab('services')} className="mt-7 flex w-full items-center justify-between rounded-2xl border border-white/10 p-4 text-sm hover:bg-white/5">Explore provider catalog <ChevronRight size={17} /></button>
-                </div>
-              </section>
-              <section className="mt-8"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.2em] text-white/35">Watch next</p><h2 className="mt-1 text-2xl font-semibold">Your saved list</h2></div><button onClick={() => setActiveTab('watchlist')} className="text-sm text-white/45 hover:text-white">View all</button></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} /></section>
-            </>
-          )}
-
-          {activeTab === 'services' && (
-            <section>
-              <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Provider catalog • {providers.length} entries</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Services</h1><p className="mt-2 max-w-2xl text-white/45">Connect what you use. The catalog separates subscription, free, live TV, TVE, rental/purchase, library, specialty, and Prime Video channel relationships.</p></div>
-              <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"><Search size={18} className="text-white/35" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find Netflix, MGM+, Peacock, Tubi..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/25" /></div>
-              <div className="mb-5 flex gap-2 overflow-x-auto pb-1">{categories.map(item => <button key={item} onClick={() => setCategory(item)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs ${category === item ? 'border-white bg-white text-black' : 'border-white/10 text-white/45 hover:text-white'}`}>{item}</button>)}</div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">                {visibleProviders.map(provider => {
-                  const isConnected = connected.includes(provider.id);
-                  return <button key={provider.id} onClick={() => connectProvider(provider.id)} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-left hover:bg-white/[0.06]">
-                    <div className="flex items-start justify-between gap-3"><span><span className="block font-medium">{provider.name}</span><span className="mt-1 block text-xs text-white/35">{provider.category}{provider.host ? ` • via ${provider.host}` : ''}</span></span>{isConnected ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 text-white/35"><Plus size={16} /></span>}</div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">{provider.devices.map(device => <span key={device} className="rounded-md bg-white/5 px-1.5 py-1 text-[9px] text-white/35">{device}</span>)}</div>
-                    {provider.note && <p className="mt-2 text-[10px] text-cyan-300/60">{provider.note}</p>}
-                  </button>;
-                })}
-              </div>
-              {visibleProviders.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center text-sm text-white/40">No provider matches that search.</div>}
-            </section>
-          )}
-
-          {activeTab === 'watchlist' && <section><div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} /></section>}
-        </main>
-
-        <footer className="mt-12 border-t border-white/10 pt-5 text-xs text-white/25">Working prototype • Provider-agnostic architecture • Catalog metadata only for now</footer>
-      </div>
-
-      {showAccount && <Modal title={accountMode === 'signed-in' ? 'Your Stream Command account' : 'Save your streaming setup'} onClose={() => { setShowAccount(false); setAccountMessage(''); }}>
-        {accountMode === 'signed-in' ? <>
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">Signed in</p><p className="mt-1 font-medium">{accountEmail}</p><p className="mt-2 text-sm leading-6 text-white/45">Your services and watchlist sync to your account. The app can keep you signed in on this device.</p></div>
-          {trialEndsAt && <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">Premium trial</p><p className="mt-1 font-medium">72 hours</p><p className="mt-2 text-xs text-white/40">Trial window ends {new Date(trialEndsAt).toLocaleString()}.</p></div>}
-          <p className="mt-4 text-xs text-white/30">Subscription billing is not enabled yet. This account layer is preparing the trial → subscription flow.</p>
+          <p className="mt-4 text-xs text-white/30">Subscription billing is not enabled yet. This account layer is preparing the trial â†’ subscription flow.</p>
         </> : <>
           <p className="mb-4 text-sm leading-6 text-white/45">Create an account once and keep your services and watchlist with you. If you are currently using anonymous mode, we upgrade that same Firebase identity so the TV pairing foundation stays intact.</p>
           <div className="space-y-3">
@@ -546,7 +469,7 @@ function App() {
 
       {showConnect && <Modal title="Connect your services" onClose={() => setShowConnect(false)}><p className="mb-4 text-sm text-white/45">Tap services you subscribe to. This prototype stores selections locally.</p><div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}
 
-      {showWhereToWatch && selectedTitle && <Modal title={`Where to watch “${selectedTitle.title}”`} onClose={() => setShowWhereToWatch(false)}>
+      {showWhereToWatch && selectedTitle && <Modal title={`Where to watch â€œ${selectedTitle.title}â€`} onClose={() => setShowWhereToWatch(false)}>
         <p className="mb-4 text-sm text-white/45">Availability below is demo data for the prototype. Production availability will come from a commercially licensed provider source.</p>
         <div className="space-y-2">
           {(demoAvailability[selectedTitle.id] || [selectedTitle.provider]).map(providerName => {
@@ -563,7 +486,7 @@ function App() {
       {receiverMode && showTv && <div className="fixed inset-0 z-50 bg-[#05060a] text-white">
         <div className="flex min-h-screen flex-col px-6 py-6 sm:px-10">
           <div className="flex items-center justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Stream Command • TV Receiver</p><p className="mt-1 text-sm text-white/35">Phone-to-TV command channel</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Stream Command â€¢ TV Receiver</p><p className="mt-1 text-sm text-white/35">Phone-to-TV command channel</p></div>
             <button onClick={() => { setReceiverMode(false); setShowTv(false); }} className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Exit receiver</button>
           </div>
           <div className="flex flex-1 items-center justify-center py-8">
@@ -593,7 +516,7 @@ function App() {
               </div>}
             </div>
           </div>
-          <div className="text-center text-xs text-white/20">Live Firestore receiver • {tvPlatforms.find(item => item.id === (pairingSession?.platform || tvPlatform))?.name || 'TV'} • Waiting for phone commands</div>
+          <div className="text-center text-xs text-white/20">Live Firestore receiver â€¢ {tvPlatforms.find(item => item.id === (pairingSession?.platform || tvPlatform))?.name || 'TV'} â€¢ Waiting for phone commands</div>
         </div>
       </div>}
       {showTv && !receiverMode && <Modal title={pairingStatus === 'paired' ? 'TV connected' : pairingStatus === 'phone-ready' ? 'Connect this TV' : 'Connect a TV'} onClose={() => setShowTv(false)}>
@@ -603,12 +526,12 @@ function App() {
             <p className="mt-5 font-semibold">What kind of connection are you starting?</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <button onClick={() => setReceiverMode(true)} className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 p-4 text-left hover:bg-cyan-300/15"><p className="font-medium">This screen is the TV</p><p className="mt-1 text-xs leading-5 text-white/45">Turn this screen into the live receiver and show a QR code.</p></button>
-              <button onClick={() => setReceiverMode(false)} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:bg-white/[0.06]"><p className="font-medium">I’m on my phone</p><p className="mt-1 text-xs leading-5 text-white/45">Pair another TV from this device.</p></button>
+              <button onClick={() => setReceiverMode(false)} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:bg-white/[0.06]"><p className="font-medium">Iâ€™m on my phone</p><p className="mt-1 text-xs leading-5 text-white/45">Pair another TV from this device.</p></button>
             </div>
             <p className="mt-5 text-sm leading-6 text-white/45">Google TV and Fire TV are our first direct-routing targets. Other platforms are prepared for native adapters.</p>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {tvPlatforms.map(platform => <button key={platform.id} onClick={() => { if (receiverMode) { setTvPlatform(platform.id); startTvPairing(selectedTitle, platform.id).then(() => setShowTv(true)); } else { startTvPairing(selectedTitle, platform.id); } }} className={`rounded-2xl border p-4 text-left transition ${tvPlatform === platform.id ? 'border-cyan-300/40 bg-cyan-300/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
-                <p className="font-medium">{platform.name}</p><p className="mt-1 text-xs text-white/35">{platform.phase} • {platform.routeType === 'deep-link' ? 'Deep-link ready' : platform.routeType === 'native-app' ? 'Native adapter planned' : 'Web fallback'}</p>
+                <p className="font-medium">{platform.name}</p><p className="mt-1 text-xs text-white/35">{platform.phase} â€¢ {platform.routeType === 'deep-link' ? 'Deep-link ready' : platform.routeType === 'native-app' ? 'Native adapter planned' : 'Web fallback'}</p>
               </button>)}
             </div>
           </> : pairingStatus === 'phone-ready' ? <>
@@ -627,8 +550,8 @@ function App() {
           </> : <>
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={30} /></div>            <p className="mt-5 font-semibold">Living Room TV is paired</p>
             <p className="mt-2 text-sm leading-6 text-white/45">This device is now connected to the live TV session.</p>
-            {pairingSession?.command && <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">TV command received</p><p className="mt-1 font-semibold">{pairingSession.command.title}</p><p className="text-xs text-white/35">Route: {pairingSession.command.provider} • {tvPlatforms.find(item => item.id === pairingSession.command.platform)?.name || pairingSession.command.platform}</p><p className="mt-2 text-xs text-white/45">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV deep-link route is waiting for the provider’s licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Platform adapter is ready for native TV integration.' : 'Receiver fallback is ready.'}</p>{pairingSession.command.launchUri && <button onClick={() => window.open(pairingSession.command.launchUri, '_blank', 'noopener,noreferrer')} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black">Open provider fallback</button>}</div>}
-            {selectedTitle && <button onClick={sendTitleToPairedTv} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Send “{selectedTitle.title}” to TV</button>}
+            {pairingSession?.command && <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">TV command received</p><p className="mt-1 font-semibold">{pairingSession.command.title}</p><p className="text-xs text-white/35">Route: {pairingSession.command.provider} â€¢ {tvPlatforms.find(item => item.id === pairingSession.command.platform)?.name || pairingSession.command.platform}</p><p className="mt-2 text-xs text-white/45">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV deep-link route is waiting for the providerâ€™s licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Platform adapter is ready for native TV integration.' : 'Receiver fallback is ready.'}</p>{pairingSession.command.launchUri && <button onClick={() => window.open(pairingSession.command.launchUri, '_blank', 'noopener,noreferrer')} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black">Open provider fallback</button>}</div>}
+            {selectedTitle && <button onClick={sendTitleToPairedTv} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Send â€œ{selectedTitle.title}â€ to TV</button>}
             <button onClick={() => setShowTv(false)} className="mt-3 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-white/70">Done</button>
           </>}
         </div>
