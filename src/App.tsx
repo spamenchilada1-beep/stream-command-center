@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { getProviderConnection } from './providerConnections';
 
 type Provider = {
   id: string;
@@ -172,6 +173,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [showConnect, setShowConnect] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState('');
   const [showTv, setShowTv] = useState(false);  const [selectedTitle, setSelectedTitle] = useState<SavedTitle | null>(null);
   const [showWhereToWatch, setShowWhereToWatch] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
@@ -288,7 +290,17 @@ function App() {
   }, [search, category]);
 
   const connectProvider = (id: string) => {
-    setConnected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);  };
+    const provider = providers.find(item => item.id === id);
+    if (!provider) return;
+    const connection = getProviderConnection(id);
+    if (connection.status !== 'configured') {
+      setConnectionMessage(
+        `${provider.name} is in the connection layer, but its provider authentication adapter is not configured yet.`
+      );
+      return;
+    }
+    setConnected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+  };
 
   const submitAccount = async () => {
     const email = accountForm.email.trim();
@@ -467,7 +479,7 @@ function App() {
         </>}
       </Modal>}
 
-      {showConnect && <Modal title="Connect your services" onClose={() => setShowConnect(false)}><p className="mb-4 text-sm text-white/45">Tap services you subscribe to. This prototype stores selections locally.</p><div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}
+      {showConnect && <Modal title="Connect your services" onClose={() => { setShowConnect(false); setConnectionMessage(''); }}><p className="mb-4 text-sm text-white/45">Choose a service to start its supported connection flow. Provider account authentication is being wired through individual adapters.</p>{connectionMessage && <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-3 text-xs leading-5 text-cyan-100/80">{connectionMessage}</div>}<div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}
 
       {showWhereToWatch && selectedTitle && <Modal title={`Where to watch “${selectedTitle.title}”`} onClose={() => setShowWhereToWatch(false)}>
         <p className="mb-4 text-sm text-white/45">Availability below is demo data for the prototype. Production availability will come from a commercially licensed provider source.</p>
