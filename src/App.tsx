@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, 
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getProviderConnection } from './providerConnections';
+import { getAvailability, type AvailabilityResult } from './availability';
 
 type Provider = {
   id: string;
@@ -160,12 +161,6 @@ const starterTitles: SavedTitle[] = [
 
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
 
-const demoAvailability: Record<string, string[]> = {
-  yellowstone: ['Paramount+', 'Prime Video'],
-  bear: ['Hulu'],
-  fallout: ['Prime Video'],
-};
-
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'services' | 'watchlist'>('home');
   const [connected, setConnected] = useState<string[]>(() => JSON.parse(localStorage.getItem('stream-connected') || '[]'));
@@ -176,6 +171,8 @@ function App() {
   const [connectionMessage, setConnectionMessage] = useState('');
   const [showTv, setShowTv] = useState(false);  const [selectedTitle, setSelectedTitle] = useState<SavedTitle | null>(null);
   const [showWhereToWatch, setShowWhereToWatch] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilityResult | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
   const [tvPaired, setTvPaired] = useState(false);
   const [pairingStatus, setPairingStatus] = useState<'idle' | 'waiting' | 'phone-ready' | 'paired'>('idle');
@@ -395,7 +392,15 @@ function App() {
     };
     await updateDoc(doc(db, 'pairingSessions', pairingCode), { command });
   };  const sendToTv = (title: SavedTitle) => startTvPairing(title);
-  const openWhereToWatch = (title: SavedTitle) => { setSelectedTitle(title); setShowWhereToWatch(true); };
+  const openWhereToWatch = async (title: SavedTitle) => {
+    setSelectedTitle(title);
+    setAvailability(null);
+    setAvailabilityLoading(true);
+    setShowWhereToWatch(true);
+    const result = await getAvailability(title.title);
+    setAvailability(result);
+    setAvailabilityLoading(false);
+  };
 
   useEffect(() => {
     const command = pairingSession?.command as TvCommand | undefined;
@@ -488,18 +493,22 @@ function App() {
 
       {showConnect && <Modal title="Connect your services" onClose={() => { setShowConnect(false); setConnectionMessage(''); }}><p className="mb-4 text-sm text-white/45">Choose a service to start its supported connection flow. Provider account authentication is being wired through individual adapters.</p>{connectionMessage && <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-3 text-xs leading-5 text-cyan-100/80">{connectionMessage}</div>}<div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}
 
-      {showWhereToWatch && selectedTitle && <Modal title={`Where to watch “${selectedTitle.title}”`} onClose={() => setShowWhereToWatch(false)}>
-        <p className="mb-4 text-sm text-white/45">Availability below is demo data for the prototype. Production availability will come from a commercially licensed provider source.</p>
-        <div className="space-y-2">
-          {(demoAvailability[selectedTitle.id] || [selectedTitle.provider]).map(providerName => {
-            const provider = providers.find(item => item.name === providerName);
+      {showWhereToWatch && selectedTitle && <Modal title={`Where to watch “${selectedTitle.title}”`} onClose={() => { setShowWhereToWatch(false); setAvailability(null); }}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-white/45">{availability?.source === 'watchmode' ? 'Live U.S. availability' : 'Development fallback availability'}</p>
+          {availability && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/35">{availability.source}</span>}
+        </div>
+        {availabilityLoading ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">Checking current availability…</div> : availability && availability.availability.length > 0 ? <div className="space-y-2">
+          {availability.availability.map((item, index) => {
+            const provider = providers.find(entry => entry.name === item.providerName);
             const connectedHere = provider ? connected.includes(provider.id) : false;
-            return <div key={providerName} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div><p className="font-medium">{providerName}</p><p className="text-xs text-white/35">{connectedHere ? 'Connected to your account' : 'Available provider'}</p></div>
+            const availabilityLabel = item.type === 'free' ? 'Free' : item.type === 'rent' ? 'Rent' : item.type === 'buy' ? 'Buy' : item.type === 'tve' ? 'TV provider login' : 'Subscription';
+            return <div key={`${item.providerName}-${item.type}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div><p className="font-medium">{item.providerName}</p><p className="text-xs text-white/35">{connectedHere ? 'Added to your services' : availabilityLabel}{item.format ? ` • ${item.format}` : ''}{item.price != null ? ` • $${item.price.toFixed(2)}` : ''}</p></div>
               <button onClick={() => { setShowWhereToWatch(false); setShowTv(true); }} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black">Watch on TV</button>
             </div>;
           })}
-        </div>
+        </div> : <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">No current availability was returned for this title.</div>}
       </Modal>}
 
       {receiverMode && showTv && <div className="fixed inset-0 z-50 bg-[#05060a] text-white">
