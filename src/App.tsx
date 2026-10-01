@@ -462,104 +462,6 @@ function App() {
           <div className="space-y-3">
             <input value={accountForm.email} onChange={event => setAccountForm(current => ({ ...current, email: event.target.value }))} type="email" placeholder="Email address" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
             <input value={accountForm.password} onChange={event => setAccountForm(current => ({ ...current, password: event.target.value }))} type="password" placeholder="Password (6+ characters)" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
-            <button disabled={accountBusy} onClick={submitAccount} className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-black disabled:opacity-50">{accountBusy ? 'Working...' : 'Create account / Sign in'}</button>  };
-
-  const submitAccount = async () => {
-    const email = accountForm.email.trim();
-    const pwField = accountForm.pwField;
-    if (!email || pwField.length < 6) {
-      setAccountMessage('Enter an email and a pwField with at least 6 characters.');
-      return;
-    }
-    setAccountBusy(true);
-    setAccountMessage('');
-    try {
-      const currentUser = auth.currentUser;
-      if (currentUser?.isAnonymous) {
-        try {
-          const credential = EmailAuthProvider.credential(email, pwField);
-          await linkWithCredential(currentUser, credential);
-          setAccountMessage('Account created. Your saved services and watchlist are now tied to this account.');
-          setAccountForm({ email: '', pwField: '' });
-          return;
-        } catch (error: any) {
-          if (error?.code !== 'auth/email-already-in-use') throw error;
-        }
-      }
-      await signInWithEmailAndpwField(auth, email, pwField);
-      setAccountMessage('Signed in. Your account data is now available on this device.');
-      setAccountForm({ email: '', pwField: '' });
-    } catch (error: any) {
-      const code = error?.code || '';
-      setAccountMessage(code === 'auth/invalid-credential' ? 'That email or pwField was not recognized.' : code === 'auth/email-already-in-use' ? 'That email already has an account. Use Sign in with that account.' : 'We could not complete the account request. Please try again.');    } finally {
-      setAccountBusy(false);
-    }
-  };
-
-  const startTvPairing = async (title: SavedTitle | null = null, platformOverride: TvPlatform | null = null) => {
-    setSelectedTitle(title);
-    const platform = platformOverride || tvPlatform;
-    setTvPlatform(platform);
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    setPairingCode(code);
-    setTvPaired(false);
-    setPairingStatus('waiting');
-    setPairingSession(null);
-    setShowTv(true);
-    if (!auth.currentUser) await signInAnonymously(auth);
-    await setDoc(doc(db, 'pairingSessions', code), {
-      status: 'waiting',
-      tvName: `${tvPlatforms.find(item => item.id === platform)?.name || 'TV'} • Living Room`,
-      platform,
-      tvUserId: auth.currentUser?.uid || null,
-      titleId: title?.id || null,
-      title: title?.title || null,
-      type: title?.type || null,
-      provider: title?.provider || null,
-      accent: title?.accent || null,
-      command: null,
-      createdAt: serverTimestamp(),
-    });
-  };
-  const confirmPhonePairing = async () => {
-    if (!pairingCode || !auth.currentUser) return;
-    await updateDoc(doc(db, 'pairingSessions', pairingCode), {
-      status: 'paired',
-      phoneUserId: auth.currentUser.uid,
-      pairedAt: serverTimestamp(),
-    });
-    localStorage.setItem('stream-tv-session', pairingCode);
-    setTvPaired(true);
-    setPairingStatus('paired');
-  };
-
-  const sendTitleToPairedTv = async () => {
-    if (!pairingCode || !selectedTitle) return;
-    const platform = (pairingSession?.platform || tvPlatform) as TvPlatform;
-    const route = resolveTvRoute(platform, selectedTitle.provider);
-    const command: TvCommand = {
-      action: 'open-title',
-      platform,
-      titleId: selectedTitle.id,
-      title: selectedTitle.title,
-      provider: selectedTitle.provider,
-      routeType: route.routeType,
-      routeStatus: route.status,
-      launchUri: route.launchUri,
-      sentAt: Date.now(),
-    };
-    await updateDoc(doc(db, 'pairingSessions', pairingCode), { command });
-  };  const sendToTv = (title: SavedTitle) => startTvPairing(title);
-  const openWhereToWatch = (title: SavedTitle) => { setSelectedTitle(title); setShowWhereToWatch(true); };
-
-  useEffect(() => {
-    const command = pairingSession?.command as TvCommand | undefined;
-    if (!receiverMode || !command?.launchUri || !command.sentAt) return;
-    if (lastAutoLaunchCommand.current === command.sentAt) return;
-    lastAutoLaunchCommand.current = command.sentAt;
-    window.location.assign(command.launchUri);
-  }, [receiverMode, pairingSession?.command]);
-
   return (
     <div className="min-h-screen bg-[#08090d] text-white">
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-10 sm:px-6">
@@ -635,7 +537,7 @@ function App() {
           <p className="mb-4 text-sm leading-6 text-white/45">Create an account once and keep your services and watchlist with you. If you are currently using anonymous mode, we upgrade that same Firebase identity so the TV pairing foundation stays intact.</p>
           <div className="space-y-3">
             <input value={accountForm.email} onChange={event => setAccountForm(current => ({ ...current, email: event.target.value }))} type="email" placeholder="Email address" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
-            <input value={accountForm.pwField} onChange={event => setAccountForm(current => ({ ...current, pwField: event.target.value }))} type="pwField" placeholder="pwField (6+ characters)" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
+            <input value={accountForm.password} onChange={event => setAccountForm(current => ({ ...current, password: event.target.value }))} type="password" placeholder="Password (6+ characters)" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
             <button disabled={accountBusy} onClick={submitAccount} className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-black disabled:opacity-50">{accountBusy ? 'Working...' : 'Create account / Sign in'}</button>          </div>
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-white/35">New accounts receive the planned 72-hour premium trial window. Payment collection will be added after the core product flow is validated.</div>
           {accountMessage && <p className="mt-4 text-sm text-cyan-200">{accountMessage}</p>}
