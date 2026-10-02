@@ -563,7 +563,7 @@ function App() {
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-cyan-400/10 text-cyan-200"><MonitorPlay size={30} /></div>
             <p className="mt-5 font-semibold">What kind of connection are you starting?</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button onClick={() => setReceiverMode(true)} className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 p-4 text-left hover:bg-cyan-300/15"><p className="font-medium">This screen is the TV</p><p className="mt-1 text-xs leading-5 text-white/45">Turn this screen into the live receiver and show a QR code.</p></button>
+              <button onClick={async () => { setReceiverMode(true); await startTvPairing(selectedTitle, tvPlatform); }} className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 p-4 text-left hover:bg-cyan-300/15"><p className="font-medium">This screen is the TV</p><p className="mt-1 text-xs leading-5 text-white/45">Turn this screen into the live receiver and show a QR code.</p></button>
               <button onClick={() => setReceiverMode(false)} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:bg-white/[0.06]"><p className="font-medium">I’m on my phone</p><p className="mt-1 text-xs leading-5 text-white/45">Pair another TV from this device.</p></button>
             </div>
             <p className="mt-5 text-sm leading-6 text-white/45">Google TV and Fire TV are our first direct-routing targets. Other platforms are prepared for native adapters.</p>
