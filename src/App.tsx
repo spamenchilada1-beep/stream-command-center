@@ -585,9 +585,9 @@ function App() {
                 <div className="rounded-[1.5rem] border border-white/10 bg-white p-4 shadow-2xl">
                   <QRCodeSVG value={window.location.origin + window.location.pathname + '?pair=' + pairingCode} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
                 </div>
-                <div className="mt-4 inline-flex flex-col items-center rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-7 py-3">
-                  <span className="text-[11px] uppercase tracking-[0.24em] text-cyan-300/60">Pairing code</span>
-                  <span className="mt-1 font-mono text-4xl font-semibold tracking-[0.26em] text-cyan-200">{pairingCode}</span>
+                <div className="mt-3 inline-flex flex-col items-center rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-2">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/60">Pairing code</span>
+                  <span className="mt-0.5 font-mono text-3xl font-semibold tracking-[0.24em] text-cyan-200">{pairingCode}</span>
                 </div>
                 <p className="mt-4 text-lg font-medium tracking-tight text-white/85">Scan to connect your phone</p>
                 <p className="mt-1 text-sm text-white/35">Then choose what to watch from your phone.</p>
