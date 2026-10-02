@@ -560,15 +560,20 @@ function App() {
             <button onClick={() => { setReceiverMode(false); setShowTv(false); }} className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Exit receiver</button>
           </div>
           <div className="flex flex-1 items-start justify-center overflow-hidden py-2">
-            <div className="w-full max-w-5xl">              {pairingStatus === 'waiting' && <div className="grid w-full gap-4 lg:grid-cols-[1fr_1.1fr] lg:items-start">
-                <div>
-                  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-xs text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-300" /> Receiver online</div>
-                  <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Connect your phone.</h1>
-                  <p className="mt-3 max-w-xl text-base leading-6 text-white/45">Scan the QR code with your phone. Once paired, anything you send from your watchlist appears here instantly.</p>
-                  <div className="mt-4 inline-flex flex-col rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-3"><span className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/60">Pairing code</span><span className="mt-1 font-mono text-3xl font-semibold tracking-[0.24em] text-cyan-200">{pairingCode}</span></div>
-                  <p className="mt-3 text-xs text-white/25">Keep this screen open while you use the phone.</p>
+            <div className="w-full max-w-5xl">              {pairingStatus === 'waiting' && <div className="w-full">
+                <div className="flex items-start justify-center gap-5 lg:gap-8">
+                  <div className="flex justify-center"><div className="rounded-[1.15rem] border border-white/10 bg-white/[0.04] p-3 shadow-2xl"><QRCodeSVG value={window.location.origin + window.location.pathname + '?pair=' + pairingCode} size={170} bgColor="transparent" fgColor="#ffffff" includeMargin /></div></div>
+                  <div className="pt-2">
+                    <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-[11px] text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-300" /> Receiver online</div>
+                    <div className="mt-4 inline-flex w-fit flex-col rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-3"><span className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/60">Pairing code</span><span className="mt-1 font-mono text-3xl font-semibold tracking-[0.24em] text-cyan-200">{pairingCode}</span></div>
+                  </div>
                 </div>
-                <div className="flex justify-center"><div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}`} size={190} bgColor="transparent" fgColor="#ffffff" includeMargin /><p className="mt-3 text-center text-xs uppercase tracking-[0.2em] text-white/30">Scan to pair</p></div></div>
+                <div className="mt-3 text-center">
+                  <p className="text-lg font-medium tracking-tight text-white/80">Connect your phone</p>
+                  <p className="mt-1 text-xs leading-5 text-white/35">Scan the QR code. Once paired, use your phone to choose what to watch and send it to this TV.</p>
+                  <p className="mt-1 text-[11px] text-white/20">Keep this screen open.</p>
+                </div>
+                
               </div>}
               {pairingStatus === 'paired' && <div className="text-center">
                 <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-4 py-2 text-sm text-emerald-300"><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" /> Phone connected</div>
