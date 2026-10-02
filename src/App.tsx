@@ -435,6 +435,16 @@ function App() {
   };
 
   useEffect(() => {
+    if (!authReady) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tv') !== 'new') return;
+    const requestedPlatform = params.get('platform') as TvPlatform | null;
+    const platform = tvPlatforms.some(item => item.id === requestedPlatform) ? requestedPlatform : 'google-tv';
+    setReceiverMode(true);
+    startTvPairing(null, platform);
+  }, [authReady]);
+
+  useEffect(() => {
     const command = pairingSession?.command as TvCommand | undefined;
     if (!receiverMode || !command?.launchUri || !command.sentAt) return;
     if (lastAutoLaunchCommand.current === command.sentAt) return;
