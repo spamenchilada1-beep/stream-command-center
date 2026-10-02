@@ -375,33 +375,55 @@ function App() {
     setPairingStatus('paired');
   };
 
-  const sendTitleToPairedTv = async () => {
-    if (!pairingCode || !selectedTitle) return;
+  const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null) => {
+    const title = titleOverride || selectedTitle;
+    const code = codeOverride || pairingCode;
+    if (!code || !title) return;
+    setSelectedTitle(title);
+    setPairingCode(code);
     const platform = (pairingSession?.platform || tvPlatform) as TvPlatform;
-    const result = await getAvailability(selectedTitle.title);
+    const result = await getAvailability(title.title);
     const sources = result.availability || [];
-    const preferred = sources.find(item => item.providerName.toLowerCase() === selectedTitle.provider.toLowerCase())
+    const preferred = sources.find(item => item.providerName.toLowerCase() === title.provider.toLowerCase())
       || sources.find(item => {
         const provider = providers.find(entry => entry.name.toLowerCase() === item.providerName.toLowerCase());
         return provider ? connected.includes(provider.id) : false;
       })
       || sources.find(item => item.type === 'sub' || item.type === 'free')
       || sources[0];
-    const providerName = preferred?.providerName || selectedTitle.provider;
+    const providerName = preferred?.providerName || title.provider;
     const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null);
     const command: TvCommand = {
       action: 'open-title',
       platform,
-      titleId: selectedTitle.id,
-      title: selectedTitle.title,
+      titleId: title.id,
+      title: title.title,
       provider: providerName,
       routeType: route.routeType,
       routeStatus: route.status,
       launchUri: route.launchUri,
       sentAt: Date.now(),
     };
-    await updateDoc(doc(db, 'pairingSessions', pairingCode), { command });
-  };  const sendToTv = (title: SavedTitle) => startTvPairing(title);
+    await updateDoc(doc(db, 'pairingSessions', code), { command });
+  };
+  const sendToTv = async (title: SavedTitle) => {
+    const savedCode = localStorage.getItem('stream-tv-session');
+    if (savedCode) {
+      const sessionSnap = await getDoc(doc(db, 'pairingSessions', savedCode));
+      if (sessionSnap.exists() && sessionSnap.data().status === 'paired') {
+        const session = sessionSnap.data();
+        setPairingCode(savedCode);
+        setPairingSession(session);
+        setPairingStatus('paired');
+        setTvPaired(true);
+        setShowTv(true);
+        await sendTitleToPairedTv(title, savedCode);
+        return;
+      }
+      localStorage.removeItem('stream-tv-session');
+    }
+    await startTvPairing(title);
+  };
   const openWhereToWatch = async (title: SavedTitle) => {
     setSelectedTitle(title);
     setAvailability(null);
