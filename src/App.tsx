@@ -188,6 +188,7 @@ function App() {
   const [tvPlatform, setTvPlatform] = useState<TvPlatform>('google-tv');
   const [receiverMode, setReceiverMode] = useState(false);
   const [receiverRequested, setReceiverRequested] = useState(false);
+  const [tvConnectedNotice, setTvConnectedNotice] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState('');
   const [accountMode, setAccountMode] = useState<'signed-out' | 'signed-in' | 'anonymous'>('anonymous');
@@ -393,6 +394,9 @@ function App() {
     localStorage.setItem('stream-tv-session', pairingCode);
     setTvPaired(true);
     setPairingStatus('paired');
+    setShowTv(false);
+    setActiveTab('watchlist');
+    setTvConnectedNotice(true);
   };
 
   const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null) => {
@@ -533,7 +537,10 @@ function App() {
             </section>
           )}
 
-          {activeTab === 'watchlist' && <section><div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} /></section>}
+          {activeTab === 'watchlist' && <section>
+            {tvConnectedNotice && <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span><div><p className="text-sm font-semibold text-emerald-200">TV connected</p><p className="text-xs text-white/40">Choose a title below to send it to your TV.</p></div></div><button onClick={() => setTvConnectedNotice(false)} className="rounded-full p-1.5 text-white/30 hover:bg-white/5 hover:text-white"><X size={16} /></button></div>}
+            <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
+          </section>}
         </main>
 
         <footer className="mt-12 border-t border-white/10 pt-5 text-xs text-white/25">Working prototype • Provider-agnostic architecture • Catalog metadata only for now</footer>
