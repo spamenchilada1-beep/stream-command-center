@@ -187,6 +187,7 @@ function App() {
   const [pairingSession, setPairingSession] = useState<any>(null);
   const [tvPlatform, setTvPlatform] = useState<TvPlatform>('google-tv');
   const [receiverMode, setReceiverMode] = useState(false);
+  const [receiverRequested, setReceiverRequested] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState('');
   const [accountMode, setAccountMode] = useState<'signed-out' | 'signed-in' | 'anonymous'>('anonymous');
@@ -250,10 +251,10 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const pairCode = params.get('pair');
     const receiverCode = params.get('tv');
-    if (receiverCode === 'new') {
+    if (window.location.pathname === '/tv' || receiverCode === 'new') {
       setReceiverMode(true);
       setShowTv(true);
-      startTvPairing(null, 'browser').catch(() => undefined);
+      setReceiverRequested(true);
       return;
     }
     if (receiverCode) {
@@ -269,6 +270,11 @@ function App() {
       setShowTv(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!receiverRequested || !authReady || pairingCode) return;
+    startTvPairing(null, 'browser').catch(() => undefined);
+  }, [receiverRequested, authReady, pairingCode]);
 
   useEffect(() => {
     if (!pairingCode || !authReady) return;
