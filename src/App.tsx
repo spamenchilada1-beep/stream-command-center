@@ -140,12 +140,22 @@ function normalizeProviderName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }): string | null {
+function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }, webUrl: string | null = null): string | null {
   const candidates = platform === 'apple-tv' ? [item.tvosUrl]
     : platform === 'roku' ? [item.rokuUrl]
     : platform === 'google-tv' || platform === 'fire-tv' ? [item.androidTvUrl, item.androidUrl]
     : [];
   const nativeUrl = candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
+
+  if (platform === 'fire-tv' && normalizeProviderName(provider) === 'hulu' && webUrl) {
+    try {
+      const url = new URL(webUrl);
+      const match = url.pathname.match(/^\/(series|watch)\/([^/]+)/);
+      if (match) return `hulu://${match[1]}/${match[2]}`;
+    } catch {
+      return null;
+    }
+  }
 
   if (platform === 'fire-tv' && normalizeProviderName(provider) === 'peacock') {
     return 'intent://launch/#Intent;package=com.peacock.peacockfiretv;component=com.peacock.peacockfiretv/com.peacock.peacocktv.AmazonMainActivity;end';
@@ -455,7 +465,7 @@ function App() {
     const sources = result.availability || [];
     const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
     const providerName = title.provider;
-    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred) : null;
+    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
     const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
     const command: TvCommand = {
       action: 'open-title',
