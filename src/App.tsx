@@ -125,24 +125,24 @@ const providerWebFallbacks: Record<string, string> = {
   'Plex': 'https://watch.plex.tv/',
 };
 
-function resolveTvRoute(platform: TvPlatform, provider: string): TvRoute {
+function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string | null = null): TvRoute {
   const routeType = tvPlatforms.find(item => item.id === platform)?.routeType || 'fallback';
   if (routeType === 'deep-link') {
     return {
       platform,
       provider,
-      routeType,
-      status: 'licensed-link-needed',
-      launchUri: null,
+      routeType: webUrl ? 'fallback' : routeType,
+      status: webUrl ? 'receiver-fallback' : 'licensed-link-needed',
+      launchUri: webUrl,
     };
   }
   if (routeType === 'native-app') {
     return {
       platform,
       provider,
-      routeType,
-      status: 'adapter-ready',
-      launchUri: null,
+      routeType: webUrl ? 'fallback' : routeType,
+      status: webUrl ? 'receiver-fallback' : 'adapter-ready',
+      launchUri: webUrl,
     };
   }
   return {    platform,
@@ -378,13 +378,23 @@ function App() {
   const sendTitleToPairedTv = async () => {
     if (!pairingCode || !selectedTitle) return;
     const platform = (pairingSession?.platform || tvPlatform) as TvPlatform;
-    const route = resolveTvRoute(platform, selectedTitle.provider);
+    const result = await getAvailability(selectedTitle.title);
+    const sources = result.availability || [];
+    const preferred = sources.find(item => item.providerName.toLowerCase() === selectedTitle.provider.toLowerCase())
+      || sources.find(item => {
+        const provider = providers.find(entry => entry.name.toLowerCase() === item.providerName.toLowerCase());
+        return provider ? connected.includes(provider.id) : false;
+      })
+      || sources.find(item => item.type === 'sub' || item.type === 'free')
+      || sources[0];
+    const providerName = preferred?.providerName || selectedTitle.provider;
+    const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null);
     const command: TvCommand = {
       action: 'open-title',
       platform,
       titleId: selectedTitle.id,
       title: selectedTitle.title,
-      provider: selectedTitle.provider,
+      provider: providerName,
       routeType: route.routeType,
       routeStatus: route.status,
       launchUri: route.launchUri,
