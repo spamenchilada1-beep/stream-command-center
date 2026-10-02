@@ -250,6 +250,12 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const pairCode = params.get('pair');
     const receiverCode = params.get('tv');
+    if (receiverCode === 'new') {
+      setReceiverMode(true);
+      setShowTv(true);
+      startTvPairing(null, 'browser').catch(() => undefined);
+      return;
+    }
     if (receiverCode) {
       setPairingCode(receiverCode);
       setPairingStatus('waiting');
