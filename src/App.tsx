@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, MonitorPlay, Plus, QrCode, Search, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
@@ -146,6 +146,18 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
     : platform === 'google-tv' || platform === 'fire-tv' ? [item.androidTvUrl, item.androidUrl]
     : [];
   const nativeUrl = candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
+
+  if (platform === 'fire-tv' && normalizeProviderName(provider) === 'primevideo' && webUrl) {
+    try {
+      const url = new URL(webUrl);
+      if (url.hostname === 'app.primevideo.com' && url.pathname === '/detail') {
+        url.pathname = '/watch';
+        return url.toString();
+      }
+    } catch {
+      return null;
+    }
+  }
 
   if (platform === 'fire-tv' && normalizeProviderName(provider) === 'hulu' && webUrl) {
     try {
