@@ -180,12 +180,7 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
 
 function launchNativeTvUrl(uri: string): void {
   if (uri.startsWith('intent://')) {
-    const link = document.createElement('a');
-    link.href = uri;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    window.setTimeout(() => link.remove(), 1000);
+    window.location.assign(uri);
     return;
   }
 
