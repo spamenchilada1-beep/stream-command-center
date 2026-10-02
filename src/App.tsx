@@ -251,6 +251,12 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const pairCode = params.get('pair');
     const receiverCode = params.get('tv');
+    if (pairCode) {
+      setPairingCode(pairCode);
+      setPairingStatus('phone-ready');
+      setShowTv(true);
+      return;
+    }
     if (window.location.pathname === '/tv' || receiverCode === 'new') {
       setReceiverMode(true);
       setShowTv(true);
@@ -261,12 +267,6 @@ function App() {
       setPairingCode(receiverCode);
       setPairingStatus('waiting');
       setReceiverMode(true);
-      setShowTv(true);
-      return;
-    }
-    if (pairCode) {
-      setPairingCode(pairCode);
-      setPairingStatus('phone-ready');
       setShowTv(true);
     }
   }, []);
@@ -583,7 +583,7 @@ function App() {
           <div className="flex flex-1 items-start justify-center overflow-hidden py-2">
             <div className="w-full max-w-5xl">              {pairingStatus === 'waiting' && <div className="flex w-full flex-col items-center justify-start pt-2 text-center">
                 <div className="rounded-[1.5rem] border border-white/10 bg-white p-4 shadow-2xl">
-                  <QRCodeSVG value={window.location.origin + window.location.pathname + '?pair=' + pairingCode} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
+                  <QRCodeSVG value={window.location.origin + '/?pair=' + pairingCode} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
                 </div>
                 <div className="mt-3 inline-flex flex-col items-center rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-2">
                   <span className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/60">Pairing code</span>
