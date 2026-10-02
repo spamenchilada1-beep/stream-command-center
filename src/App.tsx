@@ -45,6 +45,17 @@ type TvCommand = {
   sentAt: number;
 };
 
+function detectTvPlatform(): TvPlatform {
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes('roku')) return 'roku';
+  if (ua.includes('tizen')) return 'samsung';
+  if (ua.includes('web0s') || ua.includes('webos')) return 'lg';
+  if (ua.includes('appletv') || ua.includes('apple tv')) return 'apple-tv';
+  if (ua.includes('aft') || ua.includes('fire tv') || ua.includes('silk')) return 'fire-tv';
+  if (ua.includes('android tv') || ua.includes('googletv') || ua.includes('google tv')) return 'google-tv';
+  return 'browser';
+}
+
 const tvPlatforms: { id: TvPlatform; name: string; phase: string; routeType: TvCommand['routeType'] }[] = [
   { id: 'google-tv', name: 'Google TV', phase: 'Phase 1', routeType: 'deep-link' },
   { id: 'fire-tv', name: 'Fire TV', phase: 'Phase 1', routeType: 'deep-link' },
@@ -259,6 +270,9 @@ function App() {
       return;
     }
     if (window.location.pathname === '/tv' || receiverCode === 'new') {
+      const requestedPlatform = params.get('platform') as TvPlatform | null;
+      const platform = tvPlatforms.some(item => item.id === requestedPlatform) ? requestedPlatform : detectTvPlatform();
+      setTvPlatform(platform);
       setReceiverMode(true);
       setShowTv(true);
       setReceiverRequested(true);
@@ -274,8 +288,8 @@ function App() {
 
   useEffect(() => {
     if (!receiverRequested || !authReady || pairingCode) return;
-    startTvPairing(null, 'browser').catch(() => undefined);
-  }, [receiverRequested, authReady, pairingCode]);
+    startTvPairing(null, tvPlatform).catch(() => undefined);
+  }, [receiverRequested, authReady, pairingCode, tvPlatform]);
 
   useEffect(() => {
     if (!pairingCode || !authReady) return;
@@ -458,16 +472,6 @@ function App() {
     setAvailability(result);
     setAvailabilityLoading(false);
   };
-
-  useEffect(() => {
-    if (!authReady) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('tv') !== 'new') return;
-    const requestedPlatform = params.get('platform') as TvPlatform | null;
-    const platform = tvPlatforms.some(item => item.id === requestedPlatform) ? requestedPlatform : 'google-tv';
-    setReceiverMode(true);
-    startTvPairing(null, platform);
-  }, [authReady]);
 
   useEffect(() => {
     const command = pairingSession?.command as TvCommand | undefined;
