@@ -319,6 +319,8 @@ function App() {
     const pairCode = params.get('pair');
     const receiverCode = params.get('tv');
     if (pairCode) {
+      const requestedPlatform = params.get('platform') as TvPlatform | null;
+      if (tvPlatforms.some(item => item.id === requestedPlatform)) setTvPlatform(requestedPlatform!);
       setPairingCode(pairCode);
       setPairingStatus('phone-ready');
       setShowTv(true);
@@ -330,7 +332,12 @@ function App() {
       setTvPlatform(platform);
       setReceiverMode(true);
       setShowTv(true);
-      setReceiverRequested(true);
+      if (receiverCode && receiverCode !== 'new') {
+        setPairingCode(receiverCode);
+        setPairingStatus('waiting');
+      } else {
+        setReceiverRequested(true);
+      }
       return;
     }
     if (receiverCode) {
@@ -457,6 +464,7 @@ function App() {
     if (!pairingCode || !auth.currentUser) return;
     await updateDoc(doc(db, 'pairingSessions', pairingCode), {
       status: 'paired',
+      platform: tvPlatform,
       phoneUserId: auth.currentUser.uid,
       pairedAt: serverTimestamp(),
     });
