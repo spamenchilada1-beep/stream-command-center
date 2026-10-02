@@ -505,7 +505,7 @@ function App() {
             const availabilityLabel = item.type === 'free' ? 'Free' : item.type === 'rent' ? 'Rent' : item.type === 'buy' ? 'Buy' : item.type === 'tve' ? 'TV provider login' : 'Subscription';
             return <div key={`${item.providerName}-${item.type}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div><p className="font-medium">{item.providerName}</p><p className="text-xs text-white/35">{connectedHere ? 'Added to your services' : availabilityLabel}{item.format ? ` • ${item.format}` : ''}{item.price != null ? ` • $${item.price.toFixed(2)}` : ''}</p></div>
-              <button onClick={() => { setShowWhereToWatch(false); setShowTv(true); }} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black">Watch on TV</button>
+              <button onClick={() => { if (item.webUrl) { window.open(item.webUrl, '_blank', 'noopener,noreferrer'); setShowWhereToWatch(false); } }} disabled={!item.webUrl} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Watch</button>
             </div>;
           })}
         </div> : <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">No current availability was returned for this title.</div>}
