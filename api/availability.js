@@ -5,6 +5,10 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function normalizeProviderName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
 
@@ -55,6 +59,49 @@ export default async function handler(req, res) {
               format: source.quality || null,
             }));
             if (availability.length) {
+              let enrichedAvailability = availability;
+              if (apiKey) {
+                try {
+                  const watchmodeSearchUrl = new URL('https://api.watchmode.com/v1/search/');
+                  watchmodeSearchUrl.searchParams.set('search_field', 'name');
+                  watchmodeSearchUrl.searchParams.set('search_value', title);
+                  watchmodeSearchUrl.searchParams.set('types', 'tv,movie');
+                  const watchmodeSearchResponse = await fetch(watchmodeSearchUrl, {
+                    headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
+                  });
+                  if (watchmodeSearchResponse.ok) {
+                    const watchmodeSearchData = await watchmodeSearchResponse.json();
+                    const watchmodeResults = Array.isArray(watchmodeSearchData.title_results) ? watchmodeSearchData.title_results : [];
+                    const watchmodeExact = watchmodeResults.find(item => String(item.name).toLowerCase() === title.toLowerCase()) || watchmodeResults[0];
+                    if (watchmodeExact?.id) {
+                      const watchmodeSourcesUrl = new URL(`https://api.watchmode.com/v1/title/${watchmodeExact.id}/sources/`);
+                      watchmodeSourcesUrl.searchParams.set('regions', region);
+                      const watchmodeSourcesResponse = await fetch(watchmodeSourcesUrl, {
+                        headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
+                      });
+                      if (watchmodeSourcesResponse.ok) {
+                        const watchmodeSources = await watchmodeSourcesResponse.json();
+                        const nativeByProvider = new Map((Array.isArray(watchmodeSources) ? watchmodeSources : []).map(source => [normalizeProviderName(source.name), source]));
+                        enrichedAvailability = availability.map(item => {
+                          const native = nativeByProvider.get(normalizeProviderName(item.providerName));
+                          if (!native) return item;
+                          return {
+                            ...item,
+                            iosUrl: typeof native.ios_url === 'string' && native.ios_url.startsWith('http') ? native.ios_url : item.iosUrl,
+                            androidUrl: typeof native.android_url === 'string' && native.android_url.startsWith('http') ? native.android_url : item.androidUrl,
+                            tvosUrl: typeof native.tvos_url === 'string' && native.tvos_url.startsWith('http') ? native.tvos_url : item.tvosUrl,
+                            androidTvUrl: typeof native.android_tv_url === 'string' && native.android_tv_url.startsWith('http') ? native.android_tv_url : item.androidTvUrl,
+                            rokuUrl: typeof native.roku_url === 'string' && native.roku_url.startsWith('http') ? native.roku_url : item.rokuUrl,
+                          };
+                        });
+                      }
+                    }
+                  }
+                } catch {
+                  // MOTN remains the primary source when native-link enrichment is unavailable.
+                }
+              }
+
               return json(res, 200, {
                 source: 'motn',
                 region,
@@ -66,7 +113,7 @@ export default async function handler(req, res) {
                   imdbId: exact.imdbId || null,
                   tmdbId: exact.tmdbId || null,
                 },
-                availability,
+                availability: enrichedAvailability,
               });
             }
           }
