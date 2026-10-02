@@ -140,15 +140,32 @@ function normalizeProviderName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function getNativeTvUrl(platform: TvPlatform, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }): string | null {
+function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }): string | null {
   const candidates = platform === 'apple-tv' ? [item.tvosUrl]
     : platform === 'roku' ? [item.rokuUrl]
     : platform === 'google-tv' || platform === 'fire-tv' ? [item.androidTvUrl, item.androidUrl]
     : [];
-  return candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
+  const nativeUrl = candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
+
+  if (platform === 'fire-tv' && normalizeProviderName(provider) === 'peacock' && nativeUrl?.startsWith('https://')) {
+    const target = new URL(nativeUrl);
+    return `intent://${target.host}${target.pathname}${target.search}#Intent;scheme=https;package=com.peacock.peacockfiretv;component=com.peacock.peacockfiretv/com.peacock.peacocktv.AmazonMainActivity;end`;
+  }
+
+  return nativeUrl;
 }
 
 function launchNativeTvUrl(uri: string): void {
+  if (uri.startsWith('intent://')) {
+    const link = document.createElement('a');
+    link.href = uri;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    window.setTimeout(() => link.remove(), 1000);
+    return;
+  }
+
   const frame = document.createElement('iframe');
   frame.style.display = 'none';
   frame.src = uri;
@@ -439,7 +456,7 @@ function App() {
     const sources = result.availability || [];
     const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
     const providerName = title.provider;
-    const nativeUrl = preferred ? getNativeTvUrl(platform, preferred) : null;
+    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred) : null;
     const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
     const command: TvCommand = {
       action: 'open-title',
