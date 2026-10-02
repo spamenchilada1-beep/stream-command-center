@@ -559,16 +559,16 @@ function App() {
             <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Stream Command • TV Receiver</p><p className="mt-1 text-sm text-white/35">Phone-to-TV command channel</p></div>
             <button onClick={() => { setReceiverMode(false); setShowTv(false); }} className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Exit receiver</button>
           </div>
-          <div className="flex flex-1 items-center justify-center py-8">
-            <div className="w-full max-w-5xl">              {pairingStatus === 'waiting' && <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+          <div className="flex flex-1 items-start justify-center overflow-hidden py-2">
+            <div className="w-full max-w-5xl">              {pairingStatus === 'waiting' && <div className="grid w-full gap-5 lg:grid-cols-[1fr_1.1fr] lg:items-center">
                 <div>
                   <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-xs text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-300" /> Receiver online</div>
-                  <h1 className="text-5xl font-semibold tracking-[-0.04em] sm:text-7xl">Connect your phone.</h1>
-                  <p className="mt-5 max-w-xl text-lg leading-8 text-white/45">Scan this code with your phone. Once paired, anything you send from your watchlist can appear here instantly.</p>
-                  <div className="mt-8 inline-flex rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-6 py-4 font-mono text-4xl font-semibold tracking-[0.28em] text-cyan-200">{pairingCode}</div>
+                  <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Connect your phone.</h1>
+                  <p className="mt-3 max-w-xl text-base leading-6 text-white/45">Scan the QR code with your phone. Once paired, anything you send from your watchlist appears here instantly.</p>
+                  <div className="mt-4 inline-flex flex-col rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-3"><span className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/60">Pairing code</span><span className="mt-1 font-mono text-3xl font-semibold tracking-[0.24em] text-cyan-200">{pairingCode}</span></div>
                   <p className="mt-3 text-xs text-white/25">Keep this screen open while you use the phone.</p>
                 </div>
-                <div className="flex justify-center"><div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}`} size={290} bgColor="transparent" fgColor="#ffffff" includeMargin /><p className="mt-4 text-center text-xs uppercase tracking-[0.2em] text-white/30">Scan to pair</p></div></div>
+                <div className="flex justify-center"><div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}`} size={220} bgColor="transparent" fgColor="#ffffff" includeMargin /><p className="mt-3 text-center text-xs uppercase tracking-[0.2em] text-white/30">Scan to pair</p></div></div>
               </div>}
               {pairingStatus === 'paired' && <div className="text-center">
                 <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-4 py-2 text-sm text-emerald-300"><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" /> Phone connected</div>
