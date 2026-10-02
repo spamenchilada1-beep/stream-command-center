@@ -9,6 +9,30 @@ function normalizeProviderName(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+function buildPeacockNativeLinks(webUrl) {
+  if (!webUrl) return { androidTvUrl: null, tvosUrl: null };
+  try {
+    const url = new URL(webUrl);
+    if (!url.hostname.toLowerCase().endsWith('peacocktv.com')) return { androidTvUrl: null, tvosUrl: null };
+
+    const seriesMatch = url.pathname.match(/\/watch\/asset\/tv\/[^/]+\/([^/]+)/i);
+    const movieMatch = url.pathname.match(/\/watch\/asset\/movies\/.+\/([^/]+)\/?$/i);
+    let data = null;
+
+    if (seriesMatch?.[1] && /^(?:\d{8,}|[0-9a-f-]{20,})$/i.test(seriesMatch[1])) {
+      data = { providerSeriesId: seriesMatch[1], type: 'SERIES', action: 'PDP' };
+    } else if (movieMatch?.[1] && /^(?:\d{8,}|[0-9a-f-]{20,})$/i.test(movieMatch[1])) {
+      data = { pvid: movieMatch[1], type: 'PROGRAMME', action: 'PDP' };
+    }
+
+    if (!data) return { androidTvUrl: null, tvosUrl: null };
+    const deepLink = `https://www.peacocktv.com/deeplink?deeplinkData=${encodeURIComponent(JSON.stringify(data))}`;
+    return { androidTvUrl: deepLink, tvosUrl: deepLink };
+  } catch {
+    return { androidTvUrl: null, tvosUrl: null };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
 
@@ -44,20 +68,25 @@ export default async function handler(req, res) {
             const options = Array.isArray(motnShow?.streamingOptions?.[region.toLowerCase()])
               ? motnShow.streamingOptions[region.toLowerCase()]
               : [];
-            const availability = options.map(source => ({
-              providerId: source.service?.id || source.service?.name || 'motn',
-              providerName: source.service?.name || 'Unknown service',
-              type: source.type === 'subscription' ? 'sub' : source.type === 'free' ? 'free' : source.type === 'rent' ? 'rent' : source.type === 'buy' ? 'buy' : 'tve',
-              region,
-              webUrl: source.link || null,
-              iosUrl: null,
-              androidUrl: null,
-              tvosUrl: null,
-              androidTvUrl: null,
-              rokuUrl: null,
-              price: source.price?.amount ? Number(source.price.amount) : null,
-              format: source.quality || null,
-            }));
+            const availability = options.map(source => {
+              const peacockLinks = normalizeProviderName(source.service?.name) === 'peacock'
+                ? buildPeacockNativeLinks(source.link || null)
+                : { androidTvUrl: null, tvosUrl: null };
+              return {
+                providerId: source.service?.id || source.service?.name || 'motn',
+                providerName: source.service?.name || 'Unknown service',
+                type: source.type === 'subscription' ? 'sub' : source.type === 'free' ? 'free' : source.type === 'rent' ? 'rent' : source.type === 'buy' ? 'buy' : 'tve',
+                region,
+                webUrl: source.link || null,
+                iosUrl: null,
+                androidUrl: null,
+                tvosUrl: peacockLinks.tvosUrl,
+                androidTvUrl: peacockLinks.androidTvUrl,
+                rokuUrl: null,
+                price: source.price?.amount ? Number(source.price.amount) : null,
+                format: source.quality || null,
+              };
+            });
             if (availability.length) {
               let enrichedAvailability = availability;
               if (apiKey) {
