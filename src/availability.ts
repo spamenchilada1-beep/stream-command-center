@@ -14,7 +14,7 @@ export type AvailabilityItem = {
 };
 
 export type AvailabilityResult = {
-  source: 'watchmode' | 'demo';
+  source: 'motn' | 'watchmode' | 'demo';
   region: string;
   title: {
     id: number | string;

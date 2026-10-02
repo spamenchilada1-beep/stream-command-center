@@ -9,13 +9,71 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
 
   const apiKey = process.env.WATCHMODE_API_KEY;
-  if (!apiKey) return json(res, 503, { error: 'availability_source_not_configured' });
+  const motnKey = process.env.MOTN_API_KEY;
+  if (!apiKey && !motnKey) return json(res, 503, { error: 'availability_source_not_configured' });
 
   const title = String(req.query?.title || '').trim();
   const region = String(req.query?.region || 'US').toUpperCase();
   if (!title) return json(res, 400, { error: 'title_required' });
 
   try {
+    const motnKey = process.env.MOTN_API_KEY;
+    if (motnKey) {
+      const motnSearchUrl = new URL('https://api.movieofthenight.com/v4/shows/search/title');
+      motnSearchUrl.searchParams.set('title', title);
+      motnSearchUrl.searchParams.set('country', region.toLowerCase());
+      const motnSearchResponse = await fetch(motnSearchUrl, {
+        headers: { 'X-API-Key': motnKey, Accept: 'application/json' },
+      });
+      if (motnSearchResponse.ok) {
+        const motnSearchData = await motnSearchResponse.json();
+        const motnResults = Array.isArray(motnSearchData) ? motnSearchData : [];
+        const exact = motnResults.find(item => String(item.title).toLowerCase() === title.toLowerCase()) || motnResults[0];
+        if (exact?.id) {
+          const motnShowUrl = new URL('https://api.movieofthenight.com/v4/shows/' + exact.id);
+          motnShowUrl.searchParams.set('country', region.toLowerCase());
+          const motnShowResponse = await fetch(motnShowUrl, {
+            headers: { 'X-API-Key': motnKey, Accept: 'application/json' },
+          });
+          if (motnShowResponse.ok) {
+            const motnShow = await motnShowResponse.json();
+            const options = Array.isArray(motnShow?.streamingOptions?.[region.toLowerCase()])
+              ? motnShow.streamingOptions[region.toLowerCase()]
+              : [];
+            const availability = options.map(source => ({
+              providerId: source.service?.id || source.service?.name || 'motn',
+              providerName: source.service?.name || 'Unknown service',
+              type: source.type === 'subscription' ? 'sub' : source.type === 'free' ? 'free' : source.type === 'rent' ? 'rent' : source.type === 'buy' ? 'buy' : 'tve',
+              region,
+              webUrl: source.link || null,
+              iosUrl: source.link || null,
+              androidUrl: source.link || null,
+              tvosUrl: source.link || null,
+              androidTvUrl: source.link || null,
+              rokuUrl: source.link || null,
+              price: source.price?.amount ? Number(source.price.amount) : null,
+              format: source.quality || null,
+            }));
+            if (availability.length) {
+              return json(res, 200, {
+                source: 'motn',
+                region,
+                title: {
+                  id: exact.id,
+                  name: exact.title,
+                  type: exact.showType || 'series',
+                  year: exact.firstAirYear || null,
+                  imdbId: exact.imdbId || null,
+                  tmdbId: exact.tmdbId || null,
+                },
+                availability,
+              });
+            }
+          }
+        }
+      }
+    }
+
     const searchUrl = new URL('https://api.watchmode.com/v1/search/');
     searchUrl.searchParams.set('search_field', 'name');
     searchUrl.searchParams.set('search_value', title);
