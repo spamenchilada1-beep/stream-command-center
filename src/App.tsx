@@ -573,7 +573,6 @@ function App() {
                   <p className="mt-1 text-xs leading-5 text-white/35">Scan the QR code. Once paired, use your phone to choose what to watch and send it to this TV.</p>
                   <p className="mt-1 text-[11px] text-white/20">Keep this screen open.</p>
                 </div>
-                
               </div>}
               {pairingStatus === 'paired' && <div className="text-center">
                 <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-4 py-2 text-sm text-emerald-300"><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" /> Phone connected</div>
