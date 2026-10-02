@@ -136,6 +136,10 @@ const providerWebFallbacks: Record<string, string> = {
   'Plex': 'https://watch.plex.tv/',
 };
 
+function normalizeProviderName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 function getNativeTvUrl(platform: TvPlatform, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }): string | null {
   const candidates = platform === 'apple-tv' ? [item.tvosUrl]
     : platform === 'roku' ? [item.rokuUrl]
@@ -173,7 +177,7 @@ function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string |
 }
 
 const starterTitles: SavedTitle[] = [
-  { id: 'yellowstone', title: 'Yellowstone', type: 'Series', provider: 'Paramount+', accent: 'from-amber-500/40 to-orange-950' },
+  { id: 'yellowstone', title: 'Yellowstone', type: 'Series', provider: 'Peacock', accent: 'from-amber-500/40 to-orange-950' },
   { id: 'bear', title: 'The Bear', type: 'Series', provider: 'Hulu', accent: 'from-red-500/40 to-slate-950' },
   { id: 'fallout', title: 'Fallout', type: 'Series', provider: 'Prime Video', accent: 'from-cyan-500/30 to-indigo-950' },
 ];
@@ -183,7 +187,10 @@ const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE'
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'services' | 'watchlist'>('home');
   const [connected, setConnected] = useState<string[]>(() => JSON.parse(localStorage.getItem('stream-connected') || '[]'));
-  const [watchlist, setWatchlist] = useState<SavedTitle[]>(() => JSON.parse(localStorage.getItem('stream-watchlist') || JSON.stringify(starterTitles)));
+  const [watchlist, setWatchlist] = useState<SavedTitle[]>(() => {
+    const stored = JSON.parse(localStorage.getItem('stream-watchlist') || JSON.stringify(starterTitles)) as SavedTitle[];
+    return stored.map(item => item.id === 'yellowstone' ? { ...item, provider: 'Peacock' } : item);
+  });
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [showConnect, setShowConnect] = useState(false);
@@ -422,9 +429,9 @@ function App() {
     const platform = (pairingSession?.platform || tvPlatform) as TvPlatform;
     const result = await getAvailability(title.title);
     const sources = result.availability || [];
-    const preferred = sources.find(item => item.providerName.toLowerCase() === title.provider.toLowerCase())
+    const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider))
       || sources.find(item => {
-        const provider = providers.find(entry => entry.name.toLowerCase() === item.providerName.toLowerCase());
+        const provider = providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(item.providerName));
         return provider ? connected.includes(provider.id) : false;
       })
       || sources.find(item => item.type === 'sub' || item.type === 'free')
@@ -478,7 +485,7 @@ function App() {
     if (!receiverMode || !command?.launchUri || !command.sentAt) return;
     if (lastAutoLaunchCommand.current === command.sentAt) return;
     lastAutoLaunchCommand.current = command.sentAt;
-    window.location.assign(command.launchUri);
+    if (command.routeStatus === 'adapter-ready') window.location.assign(command.launchUri);
   }, [receiverMode, pairingSession?.command]);
 
   return (

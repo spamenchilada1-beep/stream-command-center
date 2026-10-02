@@ -116,11 +116,11 @@ export default async function handler(req, res) {
                           if (!native) return item;
                           return {
                             ...item,
-                            iosUrl: typeof native.ios_url === 'string' && native.ios_url.startsWith('http') ? native.ios_url : item.iosUrl,
-                            androidUrl: typeof native.android_url === 'string' && native.android_url.startsWith('http') ? native.android_url : item.androidUrl,
-                            tvosUrl: typeof native.tvos_url === 'string' && native.tvos_url.startsWith('http') ? native.tvos_url : item.tvosUrl,
-                            androidTvUrl: typeof native.android_tv_url === 'string' && native.android_tv_url.startsWith('http') ? native.android_tv_url : item.androidTvUrl,
-                            rokuUrl: typeof native.roku_url === 'string' && native.roku_url.startsWith('http') ? native.roku_url : item.rokuUrl,
+                            iosUrl: typeof native.ios_url === 'string' ? native.ios_url : item.iosUrl,
+                            androidUrl: typeof native.android_url === 'string' ? native.android_url : item.androidUrl,
+                            tvosUrl: typeof native.tvos_url === 'string' ? native.tvos_url : item.tvosUrl,
+                            androidTvUrl: typeof native.android_tv_url === 'string' ? native.android_tv_url : item.androidTvUrl,
+                            rokuUrl: typeof native.roku_url === 'string' ? native.roku_url : item.rokuUrl,
                           };
                         });
                       }
