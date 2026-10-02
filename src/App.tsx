@@ -125,24 +125,32 @@ const providerWebFallbacks: Record<string, string> = {
   'Plex': 'https://watch.plex.tv/',
 };
 
-function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string | null = null): TvRoute {
+function getNativeTvUrl(platform: TvPlatform, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }): string | null {
+  const candidates = platform === 'apple-tv' ? [item.tvosUrl]
+    : platform === 'roku' ? [item.rokuUrl]
+    : platform === 'google-tv' || platform === 'fire-tv' ? [item.androidTvUrl, item.androidUrl]
+    : [];
+  return candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
+}
+
+function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string | null = null, nativeUrl: string | null = null): TvRoute {
   const routeType = tvPlatforms.find(item => item.id === platform)?.routeType || 'fallback';
   if (routeType === 'deep-link') {
     return {
       platform,
       provider,
-      routeType: webUrl ? 'fallback' : routeType,
-      status: webUrl ? 'receiver-fallback' : 'licensed-link-needed',
-      launchUri: webUrl,
+      routeType: nativeUrl ? 'deep-link' : webUrl ? 'fallback' : routeType,
+      status: nativeUrl ? 'adapter-ready' : webUrl ? 'receiver-fallback' : 'licensed-link-needed',
+      launchUri: nativeUrl || webUrl,
     };
   }
   if (routeType === 'native-app') {
     return {
       platform,
       provider,
-      routeType: webUrl ? 'fallback' : routeType,
-      status: webUrl ? 'receiver-fallback' : 'adapter-ready',
-      launchUri: webUrl,
+      routeType: nativeUrl ? 'native-app' : webUrl ? 'fallback' : routeType,
+      status: nativeUrl ? 'adapter-ready' : webUrl ? 'receiver-fallback' : 'adapter-ready',
+      launchUri: nativeUrl || webUrl,
     };
   }
   return {    platform,
@@ -392,7 +400,8 @@ function App() {
       || sources.find(item => item.type === 'sub' || item.type === 'free')
       || sources[0];
     const providerName = preferred?.providerName || title.provider;
-    const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null);
+    const nativeUrl = preferred ? getNativeTvUrl(platform, preferred) : null;
+    const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
     const command: TvCommand = {
       action: 'open-title',
       platform,
