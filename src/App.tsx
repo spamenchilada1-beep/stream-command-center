@@ -152,7 +152,7 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
       const url = new URL(webUrl);
       if (url.hostname === 'app.primevideo.com' && url.pathname === '/detail') {
         url.pathname = '/watch';
-        return url.toString();
+        return 'intent://' + url.host + url.pathname + url.search + '#Intent;scheme=https;package=com.amazon.avod;component=com.amazon.avod/.client.activity.FireTvDeepLinkRoutingActivity;end';
       }
     } catch {
       return null;
