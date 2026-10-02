@@ -148,6 +148,14 @@ function getNativeTvUrl(platform: TvPlatform, item: { iosUrl: string | null; and
   return candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
 }
 
+function launchNativeTvUrl(uri: string): void {
+  const frame = document.createElement('iframe');
+  frame.style.display = 'none';
+  frame.src = uri;
+  document.body.appendChild(frame);
+  window.setTimeout(() => frame.remove(), 3000);
+}
+
 function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string | null = null, nativeUrl: string | null = null): TvRoute {
   const routeType = tvPlatforms.find(item => item.id === platform)?.routeType || 'fallback';
   if (routeType === 'deep-link') {
@@ -429,14 +437,8 @@ function App() {
     const platform = (pairingSession?.platform || tvPlatform) as TvPlatform;
     const result = await getAvailability(title.title);
     const sources = result.availability || [];
-    const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider))
-      || sources.find(item => {
-        const provider = providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(item.providerName));
-        return provider ? connected.includes(provider.id) : false;
-      })
-      || sources.find(item => item.type === 'sub' || item.type === 'free')
-      || sources[0];
-    const providerName = preferred?.providerName || title.provider;
+    const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
+    const providerName = title.provider;
     const nativeUrl = preferred ? getNativeTvUrl(platform, preferred) : null;
     const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
     const command: TvCommand = {
@@ -485,7 +487,7 @@ function App() {
     if (!receiverMode || !command?.launchUri || !command.sentAt) return;
     if (lastAutoLaunchCommand.current === command.sentAt) return;
     lastAutoLaunchCommand.current = command.sentAt;
-    if (command.routeStatus === 'adapter-ready') window.location.assign(command.launchUri);
+    if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
   }, [receiverMode, pairingSession?.command]);
 
   return (
@@ -620,7 +622,7 @@ function App() {
                     <p className="text-xs uppercase tracking-[0.2em] text-white/30">Route status</p>
                     <p className="mt-2 text-lg font-medium">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV route ready for a licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Native TV adapter is ready for integration.' : 'Browser receiver fallback is ready.'}</p>
                     <p className="mt-2 text-sm leading-6 text-white/40">{pairingSession.command.routeStatus === 'receiver-fallback' ? 'This receiver can open the provider web experience. Native third-party TV app launching will be enabled through the platform adapter layer.' : 'The command is live and correctly routed without pretending a native app launch is available before the provider/platform integration is connected.'}</p>
-                    {pairingSession.command.launchUri && <button onClick={() => { window.location.assign(pairingSession.command.launchUri!); }} className="mt-5 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black">Open on This TV</button>}
+                    {pairingSession.command.launchUri && <button onClick={() => launchNativeTvUrl(pairingSession.command.launchUri!)} className="mt-5 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black">Open on This TV</button>}
                   </div>
                 </> : <><h1 className="mt-10 text-5xl font-semibold tracking-[-0.04em] sm:text-7xl">Ready when you are.</h1><p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-white/45">Your phone is connected. Choose a title on the phone and tap Watch on TV.</p></>}
               </div>}
