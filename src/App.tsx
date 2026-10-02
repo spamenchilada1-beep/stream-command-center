@@ -152,7 +152,7 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
       const url = new URL(webUrl);
       if (url.hostname === 'app.primevideo.com' && url.pathname === '/detail') {
         url.pathname = '/watch';
-        return 'intent://' + url.host + url.pathname + url.search + '#Intent;scheme=https;package=com.amazon.avod;component=com.amazon.avod/.client.activity.FireTvDeepLinkRoutingActivity;end';
+        return 'amzn://avod/watch' + url.search;
       }
     } catch {
       return null;
@@ -179,7 +179,7 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
 }
 
 function launchNativeTvUrl(uri: string): void {
-  if (uri.startsWith('intent://')) {
+  if (uri.startsWith('intent://') || uri.startsWith('amzn://')) {
     window.location.assign(uri);
     return;
   }
