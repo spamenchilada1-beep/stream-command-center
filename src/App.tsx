@@ -151,7 +151,9 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
     try {
       const url = new URL(webUrl);
       const match = url.pathname.match(/^\/(series|watch)\/([^/]+)/);
-      if (match) return `hulu://${match[1]}/${match[2]}`;
+      if (match) {
+        return `intent://${match[1]}/${match[2]}#Intent;scheme=hulu;package=com.hulu.plus;component=com.hulu.plus/.SplashActivity;end`;
+      }
     } catch {
       return null;
     }
