@@ -147,9 +147,8 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
     : [];
   const nativeUrl = candidates.find(value => value && !value.toLowerCase().includes('deeplinks available for paid plans')) || null;
 
-  if (platform === 'fire-tv' && normalizeProviderName(provider) === 'peacock' && nativeUrl?.startsWith('https://')) {
-    const target = new URL(nativeUrl);
-    return `intent://${target.host}${target.pathname}${target.search}#Intent;scheme=https;package=com.peacock.peacockfiretv;component=com.peacock.peacockfiretv/com.peacock.peacocktv.AmazonMainActivity;end`;
+  if (platform === 'fire-tv' && normalizeProviderName(provider) === 'peacock') {
+    return 'intent://launch/#Intent;package=com.peacock.peacockfiretv;component=com.peacock.peacockfiretv/com.peacock.peacocktv.AmazonMainActivity;end';
   }
 
   return nativeUrl;
