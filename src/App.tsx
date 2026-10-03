@@ -683,8 +683,8 @@ function App() {
             <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Stream Command • TV Receiver</p><p className="mt-1 text-sm text-white/35">Phone-to-TV command channel</p></div>
             <button onClick={() => { setReceiverMode(false); setShowTv(false); }} className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Exit receiver</button>
           </div>
-          <div className="flex flex-1 items-start justify-center overflow-hidden py-2">
-            <div className="w-full max-w-5xl">              {pairingStatus === 'waiting' && <div className="flex w-full flex-col items-center justify-start pt-2 text-center">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden py-2">
+            <div className="w-full max-w-5xl max-h-full">              {pairingStatus === 'waiting' && <div className="flex w-full flex-col items-center justify-start pt-2 text-center">
                 <div className="rounded-[1.5rem] border border-white/10 bg-white p-4 shadow-2xl">
                   <QRCodeSVG value={window.location.origin + '/?pair=' + pairingCode} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
                 </div>
