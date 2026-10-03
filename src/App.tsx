@@ -179,16 +179,7 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
 }
 
 function launchNativeTvUrl(uri: string): void {
-  if (uri.startsWith('intent://') || uri.startsWith('amzn://')) {
-    window.location.assign(uri);
-    return;
-  }
-
-  const frame = document.createElement('iframe');
-  frame.style.display = 'none';
-  frame.src = uri;
-  document.body.appendChild(frame);
-  window.setTimeout(() => frame.remove(), 3000);
+  window.location.assign(uri);
 }
 
 function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string | null = null, nativeUrl: string | null = null): TvRoute {
