@@ -184,6 +184,7 @@ function startBridgeServer() {
     res.setHeader('Access-Control-Allow-Origin', 'https://stream-command-center-three.vercel.app');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
