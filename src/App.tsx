@@ -42,6 +42,7 @@ type TvCommand = {
   routeType: 'deep-link' | 'native-app' | 'fallback';
   routeStatus: TvRoute['status'];
   launchUri: string | null;
+  targetUrl: string | null;
   sentAt: number;
 };
 
@@ -512,6 +513,9 @@ function App() {
     const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
     const providerName = title.provider;
     const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
+    const targetUrl = platform === 'samsung'
+      ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : preferred?.webUrl || null)
+      : preferred?.webUrl || null;
     const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
     const command: TvCommand = {
       action: 'open-title',
@@ -522,6 +526,7 @@ function App() {
       routeType: route.routeType,
       routeStatus: route.status,
       launchUri: route.launchUri,
+      targetUrl,
       sentAt: Date.now(),
     };
     await updateDoc(doc(db, 'pairingSessions', code), { command });
@@ -561,6 +566,7 @@ function App() {
     if (!receiverMode || !command?.launchUri || !command.sentAt) return;
     if (lastAutoLaunchCommand.current === command.sentAt) return;
     lastAutoLaunchCommand.current = command.sentAt;
+    if (command.platform === 'fire-tv' || command.platform === 'samsung') return;
     if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
   }, [receiverMode, pairingSession?.command]);
 
@@ -695,8 +701,8 @@ function App() {
                   <div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-white/10 bg-white/[0.035] p-6 text-left">
                     <p className="text-xs uppercase tracking-[0.2em] text-white/30">Route status</p>
                     <p className="mt-2 text-lg font-medium">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV route ready for a licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Native TV adapter is ready for integration.' : 'Browser receiver fallback is ready.'}</p>
-                    <p className="mt-2 text-sm leading-6 text-white/40">{pairingSession.command.routeStatus === 'receiver-fallback' ? 'This receiver can open the provider web experience. Native third-party TV app launching will be enabled through the platform adapter layer.' : 'The command is live and correctly routed without pretending a native app launch is available before the provider/platform integration is connected.'}</p>
-                    {pairingSession.command.launchUri && <button onClick={() => launchNativeTvUrl(pairingSession.command.launchUri!)} className="mt-5 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black">Open on This TV</button>}
+                    <p className="mt-2 text-sm leading-6 text-white/40">{pairingSession.command.platform === 'fire-tv' || pairingSession.command.platform === 'samsung' ? 'Native app handoff is handled on the paired TV so its existing app session is preserved.' : pairingSession.command.routeStatus === 'receiver-fallback' ? 'This receiver can open the provider web experience. Native third-party TV app launching will be enabled through the platform adapter layer.' : 'The command is live and correctly routed without pretending a native app launch is available before the provider/platform integration is connected.'}</p>
+                    {pairingSession.command.launchUri && pairingSession.command.platform !== 'fire-tv' && pairingSession.command.platform !== 'samsung' && <button onClick={() => launchNativeTvUrl(pairingSession.command.launchUri!)} className="mt-5 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black">Open on This TV</button>}
                   </div>
                 </> : <><h1 className="mt-10 text-5xl font-semibold tracking-[-0.04em] sm:text-7xl">Ready when you are.</h1><p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-white/45">Your phone is connected. Choose a title on the phone and tap Watch on TV.</p></>}
               </div>}

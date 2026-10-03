@@ -51,8 +51,23 @@ async function launch(command) {
   }
 
   if (provider === 'peacock') {
-    await runAdb(['shell','monkey','-p','com.peacock.peacockfiretv','1']);
+    await runAdb(['shell','am','start','-n','com.peacock.peacockfiretv/com.peacock.peacocktv.AmazonMainActivity']);
     return 'peacock-app';
+  }
+
+  const nativeApps = {
+    netflix: 'com.netflix.ninja/.MainActivity',
+    hulu: 'com.hulu.plus/.SplashActivity',
+    disneyplus: 'com.disney.disneyplus/.MainActivity',
+    tubi: 'com.tubitv.ott/.MainActivity',
+    starz: 'com.starz.starzplay.firetv/.MainActivity',
+    amc: 'com.amctve.amcfiretv/.MainActivity',
+    apple: 'com.apple.atve.amazon.appletv/.MainActivity',
+  };
+  const component = nativeApps[provider];
+  if (component) {
+    await runAdb(['shell','am','start','-n',component]);
+    return 'native-app';
   }
 
   throw new Error(`No Fire TV bridge adapter for ${command.provider}`);
