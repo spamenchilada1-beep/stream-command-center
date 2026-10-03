@@ -130,10 +130,45 @@ async function queryPairedSessions(forceToken = false) {
     }));
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function launchPeacockTitle(title) {
+  const component = fireTvApps.peacock;
+  await runAdb(['-s', FIRE_TV, 'shell', 'am', 'force-stop', component]);
+  await runAdb(['-s', FIRE_TV, 'shell', 'am', 'start', '-n', component]);
+  await sleep(3000);
+
+  // Use Peacock's own signed-in search UI because the Fire TV app does not expose a public title deep link.
+  for (let i = 0; i < 8; i += 1) await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '21']); // left
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '19']); // up
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // enter
+  await sleep(700);
+
+  const searchText = String(title || '').trim().replace(/ /g, '%s');
+  if (!searchText) throw new Error('Peacock title is missing');
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'text', searchText]);
+  await sleep(500);
+
+  for (let i = 0; i < 4; i += 1) await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '20']); // down
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '21']); // left
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // select result
+  await sleep(1200);
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // open title
+  await sleep(1200);
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // play
+  return 'peacock-title-playback';
+}
+
 async function launchFireTv(command) {
   const provider = normalize(command.provider);
   const uri = command.launchUri || '';
   console.log(`[FIRETV] ${command.title} / ${command.provider}`);
+
+  if (provider === 'peacock') {
+    return launchPeacockTitle(command.title);
+  }
 
   if (provider === 'primevideo' &&
       (uri.startsWith('amzn://') ||
