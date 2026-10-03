@@ -499,19 +499,21 @@ function App() {
   };
   const sendToTv = async (title: SavedTitle) => {
     const savedCode = localStorage.getItem('stream-tv-session');
-    if (savedCode) {
-      const sessionSnap = await getDoc(doc(db, 'pairingSessions', savedCode));
+    const activeCode = savedCode || (pairingStatus === 'paired' && pairingCode ? pairingCode : null);
+    if (activeCode) {
+      const sessionSnap = await getDoc(doc(db, 'pairingSessions', activeCode));
       if (sessionSnap.exists() && sessionSnap.data().status === 'paired') {
         const session = sessionSnap.data();
-        setPairingCode(savedCode);
+        setPairingCode(activeCode);
         setPairingSession(session);
         setPairingStatus('paired');
         setTvPaired(true);
         setShowTv(true);
-        await sendTitleToPairedTv(title, savedCode);
+        if (!savedCode) localStorage.setItem('stream-tv-session', activeCode);
+        await sendTitleToPairedTv(title, activeCode);
         return;
       }
-      localStorage.removeItem('stream-tv-session');
+      if (savedCode) localStorage.removeItem('stream-tv-session');
     }
     await startTvPairing(title);
   };
