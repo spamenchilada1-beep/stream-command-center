@@ -220,6 +220,16 @@ const starterTitles: SavedTitle[] = [
 
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
 const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
+const SCC_IMPORT_EXTENSION_ID = 'fhcjfhfhdcnknkikepklmgpmcenallmm';
+
+type ChromeRuntimeBridge = {
+  sendMessage: (extensionId: string, message: unknown) => Promise<{ ok?: boolean; accepted?: boolean; scanCount?: number; reason?: string }>;
+};
+
+function getChromeRuntimeBridge(): ChromeRuntimeBridge | null {
+  const browserWindow = window as Window & { chrome?: { runtime?: ChromeRuntimeBridge } };
+  return browserWindow.chrome?.runtime || null;
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'services' | 'watchlist'>('home');
@@ -260,14 +270,6 @@ function App() {
 
   useEffect(() => { localStorage.setItem('stream-connected', JSON.stringify(connected)); }, [connected]);
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
-
-  useEffect(() => {
-    if (!importNonce) return;
-    window.postMessage(
-      { source: 'stream-command-center', type: 'scc:import-start', nonce: importNonce },
-      window.location.origin,
-    );
-  }, [importNonce]);
 
   useEffect(() => {
     if (!importNonce) return;
@@ -722,7 +724,34 @@ function App() {
 
           {activeTab === 'watchlist' && <section>
             {tvConnectedNotice && <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span><div><p className="text-sm font-semibold text-emerald-200">TV connected</p><p className="text-xs text-white/40">Choose a title below to send it to your TV.</p></div></div><button onClick={() => setTvConnectedNotice(false)} className="rounded-full p-1.5 text-white/30 hover:bg-white/5 hover:text-white"><X size={16} /></button></div>}
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><button onClick={() => { setImportMessage(''); setImportNonce(createImportNonce()); }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import watchlists</button></div>{importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session ready. Open the Stream Command browser extension to scan your signed-in streaming watchlists.</div>}{importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><button onClick={async () => {
+              setImportMessage('');
+              const nonce = createImportNonce();
+              setImportNonce(nonce);
+              const runtime = getChromeRuntimeBridge();
+              if (!runtime) {
+                setImportMessage('Chrome extension not detected. Install the Stream Command Watchlist Importer extension.');
+                return;
+              }
+              try {
+                const result = await runtime.sendMessage(SCC_IMPORT_EXTENSION_ID, {
+                  type: 'scc:import-start',
+                  nonce,
+                });
+                if (!result?.ok) {
+                  setImportMessage(`Importer could not start: ${result?.reason || 'extension unavailable'}.`);
+                  return;
+                }
+                const scanned = result.scanCount ?? 0;
+                setImportMessage(
+                  scanned > 0
+                    ? `Import scan started. ${scanned} supported provider tab${scanned === 1 ? '' : 's'} scanned.`
+                    : `No supported provider tabs were found. Keep a supported streaming service open and try again.`,
+                );
+              } catch {
+                setImportMessage('Importer connection failed. The extension is not available to this browser page.');
+              }
+            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import watchlists</button></div>{importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
           </section>}
         </main>
 
