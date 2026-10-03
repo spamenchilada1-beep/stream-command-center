@@ -461,51 +461,37 @@ function App() {
   const confirmPhonePairing = async () => {
     if (!pairingCode) return;
     setPairingError('');
-    if (!auth.currentUser) {
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        console.error('Anonymous phone pairing sign-in failed', error);
-        setPairingError('We could not connect this phone to the TV session.');
-        return;
-      }
-    }
-
-    const sessionRef = doc(db, 'pairingSessions', pairingCode);
     try {
-      const claimed = await runTransaction(db, async transaction => {
-      const snapshot = await transaction.get(sessionRef);
-      if (!snapshot.exists()) return false;
+      if (!auth.currentUser) await signInAnonymously(auth);
+      const user = auth.currentUser;
+      if (!user) throw new Error('AUTH_NOT_READY');
 
-      const session = snapshot.data();
-      if (session.status !== 'waiting') return false;
+      const sessionRef = doc(db, 'pairingSessions', pairingCode);
+      const sessionSnap = await getDoc(sessionRef);
+      if (!sessionSnap.exists()) throw new Error('PAIRING_CODE_NOT_FOUND');
+
+      const session = sessionSnap.data();
+      if (session.status !== 'waiting') throw new Error('PAIRING_CODE_NOT_WAITING');
 
       const createdAt = session.createdAt;
-      if (!createdAt || typeof createdAt.toMillis !== 'function') return false;
+      if (!createdAt || typeof createdAt.toMillis !== 'function') throw new Error('PAIRING_TIMESTAMP_MISSING');
+
       if (Date.now() - createdAt.toMillis() > PAIRING_SESSION_TTL_MS) {
-        transaction.update(sessionRef, {
+        await updateDoc(sessionRef, {
           status: 'expired',
           expiredAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        return false;
+        throw new Error('PAIRING_CODE_EXPIRED');
       }
 
-      transaction.update(sessionRef, {
+      // The TV-created platform is authoritative. The phone never overwrites it.
+      await updateDoc(sessionRef, {
         status: 'paired',
-        phoneUserId: auth.currentUser!.uid,
+        phoneUserId: user.uid,
         pairedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      return true;
-    });
-
-      if (!claimed) {
-        setPairingStatus('idle');
-        setPairingSession(null);
-        setPairingError('This TV pairing code is no longer available. Start a new TV pairing session.');
-        return;
-      }
 
       localStorage.setItem('stream-tv-session', pairingCode);
       setTvPaired(true);
@@ -513,9 +499,20 @@ function App() {
       setShowTv(false);
       setActiveTab('watchlist');
       setTvConnectedNotice(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('TV pairing confirmation failed', error);
-      setPairingError('We could not complete the TV pairing. The TV session was not changed.');
+      const code = error?.code || error?.message || 'unknown-error';
+      const messages: Record<string, string> = {
+        'permission-denied': 'Firebase denied the pairing write. The signed-in phone identity is the blocker.',
+        'failed-precondition': 'Firebase rejected the pairing request. Please start a fresh TV session.',
+        'not-found': 'The TV pairing session could not be found. Start a fresh TV session.',
+        AUTH_NOT_READY: 'The phone sign-in is not ready yet. Wait one second and tap again.',
+        PAIRING_CODE_NOT_FOUND: 'That pairing code does not exist anymore. Start a fresh TV session.',
+        PAIRING_CODE_NOT_WAITING: 'That TV session is already paired or expired. Start a fresh TV session.',
+        PAIRING_TIMESTAMP_MISSING: 'That TV session is invalid. Start a fresh TV session.',
+        PAIRING_CODE_EXPIRED: 'That pairing code expired. Start a fresh TV session.',
+      };
+      setPairingError(messages[code] || `Pairing failed: ${code}`);
     }
   };
 
