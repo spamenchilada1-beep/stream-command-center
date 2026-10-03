@@ -456,7 +456,15 @@ function App() {
     });
   };
   const confirmPhonePairing = async () => {
-    if (!pairingCode || !auth.currentUser) return;
+    if (!pairingCode) return;
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error('Anonymous phone pairing sign-in failed', error);
+        return;
+      }
+    }
 
     const sessionRef = doc(db, 'pairingSessions', pairingCode);
     const claimed = await runTransaction(db, async transaction => {
