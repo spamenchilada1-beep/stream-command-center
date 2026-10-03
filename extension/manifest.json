@@ -24,6 +24,11 @@
       "matches": ["https://stream-command-center-three.vercel.app/*"],
       "js": ["scc-bridge.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["netflix-reader.js"],
+      "run_at": "document_idle"
     }
   ],
   "externally_connectable": {

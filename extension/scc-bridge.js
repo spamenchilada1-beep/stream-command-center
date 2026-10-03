@@ -7,10 +7,14 @@ window.addEventListener('message', event => {
   if (message?.source !== 'stream-command-center' || message?.type !== 'scc:import-start') return;
   if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
 
-  chrome.runtime.sendMessage({
-    type: 'scc-session-start',
-    nonce: message.nonce,
-  });
+  try {
+    chrome.runtime.sendMessage({
+      type: 'scc-session-start',
+      nonce: message.nonce,
+    }).catch(() => {});
+  } catch {
+    // Ignore stale content-script contexts after an extension reload.
+  }
 });
 
 chrome.runtime.onMessage.addListener(message => {
