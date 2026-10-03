@@ -516,13 +516,13 @@ function App() {
     }
   };
 
-  const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null) => {
+  const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null, sessionOverride: any = null) => {
     const title = titleOverride || selectedTitle;
     const code = codeOverride || pairingCode;
     if (!code || !title) return;
     setSelectedTitle(title);
     setPairingCode(code);
-    const platform = (pairingSession?.platform || tvPlatform) as TvPlatform;
+    const activeSession = sessionOverride || pairingSession; const platform = (activeSession?.platform || tvPlatform) as TvPlatform;
     const result = await getAvailability(title.title);
     const sources = result.availability || [];
     const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
@@ -559,7 +559,7 @@ function App() {
         setTvPaired(true);
         setShowTv(true);
         if (!savedCode) localStorage.setItem('stream-tv-session', activeCode);
-        await sendTitleToPairedTv(title, activeCode);
+        await sendTitleToPairedTv(title, activeCode, session);
         return;
       }
       if (savedCode) localStorage.removeItem('stream-tv-session');

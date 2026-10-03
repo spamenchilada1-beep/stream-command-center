@@ -265,7 +265,7 @@ async function poll() {
         if (!['fire-tv', 'samsung'].includes(session.platform) || !command?.sentAt) continue;
         const key = `${session.platform}:${session.id}`;
         const ageMs = now - Number(command.sentAt);
-        if (ageMs > 0 && ageMs <= 2 * 60 * 1000) {
+        if (ageMs > 0 && ageMs <= 10 * 60 * 1000) {
           seen.set(key, command.sentAt);
           try {
             const result = session.platform === 'fire-tv'
