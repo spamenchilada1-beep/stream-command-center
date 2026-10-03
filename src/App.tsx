@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, MonitorPlay, Plus, QrCode, Search, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { getProviderConnection } from './providerConnections';
 import { getAvailability, type AvailabilityResult } from './availability';
@@ -226,6 +226,7 @@ const starterTitles: SavedTitle[] = [
 ];
 
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
+const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'services' | 'watchlist'>('home');
@@ -457,12 +458,42 @@ function App() {
   };
   const confirmPhonePairing = async () => {
     if (!pairingCode || !auth.currentUser) return;
-    await updateDoc(doc(db, 'pairingSessions', pairingCode), {
-      status: 'paired',
-      platform: tvPlatform,
-      phoneUserId: auth.currentUser.uid,
-      pairedAt: serverTimestamp(),
+
+    const sessionRef = doc(db, 'pairingSessions', pairingCode);
+    const claimed = await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(sessionRef);
+      if (!snapshot.exists()) return false;
+
+      const session = snapshot.data();
+      if (session.status !== 'waiting') return false;
+
+      const createdAt = session.createdAt;
+      if (!createdAt || typeof createdAt.toMillis !== 'function') return false;
+      if (Date.now() - createdAt.toMillis() > PAIRING_SESSION_TTL_MS) {
+        transaction.update(sessionRef, {
+          status: 'expired',
+          expiredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        return false;
+      }
+
+      transaction.update(sessionRef, {
+        status: 'paired',
+        platform: tvPlatform,
+        phoneUserId: auth.currentUser!.uid,
+        pairedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return true;
     });
+
+    if (!claimed) {
+      setPairingStatus('idle');
+      setPairingSession(null);
+      return;
+    }
+
     localStorage.setItem('stream-tv-session', pairingCode);
     setTvPaired(true);
     setPairingStatus('paired');
