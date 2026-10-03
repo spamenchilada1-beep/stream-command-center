@@ -93,16 +93,46 @@ async function runAdb(args) {
   });
 }
 
+async function getBridgeCommand(platform, forceToken = false) {
+  const token = await getCloudToken(forceToken);
+  const bridgeDocId = platform === 'fire-tv' ? '__bridge_fire_tv__' : '__bridge_samsung__';
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/pairingSessions/${bridgeDocId}`;
+  const response = await fetch(url, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (response.status === 404) return null;
+  if (response.status === 401 && !forceToken) {
+    cloudToken = null;
+    return getBridgeCommand(platform, true);
+  }
+  if (!response.ok) throw new Error(`Firestore bridge read failed: HTTP ${response.status}`);
+  const document = await response.json();
+  return {
+    id: platform,
+    platform,
+    ...fromFirestoreFields(document.fields),
+  };
+}
+
 async function queryPairedSessions(forceToken = false) {
   const token = await getCloudToken(forceToken);
+  // Only fetch native TV sessions. The previous query scanned every paired
+  // session on the account and hit Firestore HTTP 429 rate limits.
   const body = {
     structuredQuery: {
       from: [{ collectionId: 'pairingSessions' }],
       where: {
         fieldFilter: {
-          field: { fieldPath: 'status' },
-          op: 'EQUAL',
-          value: { stringValue: 'paired' },
+          field: { fieldPath: 'platform' },
+          op: 'IN',
+          value: {
+            arrayValue: {
+              values: [
+                { stringValue: 'fire-tv' },
+                { stringValue: 'samsung' },
+              ],
+            },
+          },
         },
       },
     },
@@ -125,7 +155,10 @@ async function queryPairedSessions(forceToken = false) {
 
   const rows = await response.json();
   return rows
-    .filter(row => row.document)
+    .filter(row => {
+      const fields = row.document?.fields || {};
+      return row.document && fields.status?.stringValue === 'paired';
+    })
     .map(row => ({
       id: row.document.name.split('/').pop(),
       ...fromFirestoreFields(row.document.fields),
@@ -256,13 +289,15 @@ async function poll() {
   polling = true;
 
   try {
-    const sessions = await queryPairedSessions();
+    const sessions = (await Promise.all(
+      ['fire-tv', 'samsung'].map(platform => getBridgeCommand(platform))
+    )).filter(Boolean);
 
     if (!initialized) {
       const now = Date.now();
       for (const session of sessions) {
         const command = session.command;
-        if (!['fire-tv', 'samsung'].includes(session.platform) || !command?.sentAt) continue;
+        if (!command?.sentAt) continue;
         const key = `${session.platform}:${session.id}`;
         const ageMs = now - Number(command.sentAt);
         if (ageMs > 0 && ageMs <= 10 * 60 * 1000) {

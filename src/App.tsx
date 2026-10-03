@@ -545,6 +545,16 @@ function App() {
       sentAt: Date.now(),
     };
     await updateDoc(doc(db, 'pairingSessions', code), { command });
+    if (platform === 'fire-tv' || platform === 'samsung') {
+      const bridgeDocId = platform === 'fire-tv' ? '__bridge_fire_tv__' : '__bridge_samsung__';
+      await setDoc(doc(db, 'pairingSessions', bridgeDocId), {
+        status: 'paired',
+        pairingCode: code,
+        platform,
+        command,
+        updatedAt: serverTimestamp(),
+      });
+    }
   };
   const sendToTv = async (title: SavedTitle) => {
     const savedCode = localStorage.getItem('stream-tv-session');
