@@ -681,14 +681,14 @@ function App() {
         </div> : <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">No current availability was returned for this title.</div>}
       </Modal>}
 
-      {receiverMode && showTv && <div className="fixed inset-0 z-50 bg-[#05060a] text-white">
-        <div className="flex min-h-screen flex-col px-6 py-6 sm:px-10">
+      {receiverMode && showTv && <div className="fixed inset-0 z-50 h-screen max-h-screen overflow-hidden bg-[#05060a] text-white">
+        <div className="flex h-full min-h-0 flex-col px-6 py-4 sm:px-10 sm:py-5">
           <div className="flex items-center justify-between">
             <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Stream Command • TV Receiver</p><p className="mt-1 text-sm text-white/35">Phone-to-TV command channel</p></div>
             <button onClick={() => { setReceiverMode(false); setShowTv(false); }} className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Exit receiver</button>
           </div>
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden py-2">
-            <div className="w-full max-w-5xl max-h-full">              {pairingStatus === 'waiting' && <div className="flex w-full flex-col items-center justify-start pt-2 text-center">
+            <div className="max-h-full w-full max-w-5xl overflow-y-auto overscroll-contain">              {pairingStatus === 'waiting' && <div className="flex w-full flex-col items-center justify-start pt-2 text-center">
                 <div className="rounded-[1.5rem] border border-white/10 bg-white p-4 shadow-2xl">
                   <QRCodeSVG value={window.location.origin + '/?pair=' + pairingCode} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
                 </div>
@@ -715,7 +715,7 @@ function App() {
               </div>}
             </div>
           </div>
-          <div className="text-center text-xs text-white/20">Live Firestore receiver • {tvPlatforms.find(item => item.id === (pairingSession?.platform || tvPlatform))?.name || 'TV'} • Waiting for phone commands</div>
+          <div className="shrink-0 py-1 text-center text-xs text-white/20">Live Firestore receiver • {tvPlatforms.find(item => item.id === (pairingSession?.platform || tvPlatform))?.name || 'TV'} • Waiting for phone commands</div>
         </div>
       </div>}
       {showTv && !receiverMode && <Modal title={pairingStatus === 'paired' ? 'TV connected' : pairingStatus === 'phone-ready' ? 'Connect this TV' : 'Connect a TV'} onClose={() => setShowTv(false)}>
