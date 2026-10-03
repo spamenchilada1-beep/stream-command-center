@@ -356,8 +356,15 @@ function App() {
       const data = snapshot.data();
       setPairingSession(data);
       if (data.status === 'paired') {
-        setTvPaired(true);
-        setPairingStatus('paired');
+        const isTvOwner = data.tvUserId === auth.currentUser?.uid;
+        const isPhoneOwner = data.phoneUserId === auth.currentUser?.uid;
+        if (isTvOwner || isPhoneOwner) {
+          setTvPaired(true);
+          setPairingStatus('paired');
+        } else {
+          setTvPaired(false);
+          setPairingStatus('phone-ready');
+        }
       }
       if (data.title && !selectedTitle) {
         setSelectedTitle({
