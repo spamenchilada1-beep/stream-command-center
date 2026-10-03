@@ -1,16 +1,10 @@
 const { execFile } = require('child_process');
-const {
-  getGlobalDefaultAccount,
-  getAccessToken,
-} = require('C:/Users/Pam Anglada/AppData/Roaming/npm/node_modules/firebase-tools/lib/auth.js');
+const http = require('http');
 
 const FIRE_TV = '192.168.0.50:5555';
 const SAMSUNG_TV = '192.168.0.95';
 const SAMSUNG_PORT = 8001;
-const PROJECT_ID = 'stream-command-center-c5445';
-const FIRESTORE_RUN_QUERY =
-  `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
-const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
+const PORT = 8787;
 
 const samsungApps = {
   netflix: '3201907018807',
@@ -35,134 +29,19 @@ const fireTvApps = {
   apple: 'com.apple.atve.amazon.appletv/.MainActivity',
 };
 
-const seen = new Map();
-let cloudToken = null;
-let cloudTokenExpiresAt = 0;
-let initialized = false;
-let polling = false;
-let nextPollAt = 0;
+const seenCommands = new Map();
 
 function normalize(value) {
-  return (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function fromFirestoreValue(value) {
-  if (!value) return null;
-  if (value.stringValue !== undefined) return value.stringValue;
-  if (value.integerValue !== undefined) return Number(value.integerValue);
-  if (value.doubleValue !== undefined) return value.doubleValue;
-  if (value.booleanValue !== undefined) return value.booleanValue;
-  if (value.nullValue !== undefined) return null;
-  if (value.timestampValue !== undefined) return value.timestampValue;
-  if (value.mapValue?.fields) return fromFirestoreFields(value.mapValue.fields);
-  if (value.arrayValue?.values) return value.arrayValue.values.map(fromFirestoreValue);
-  return null;
-}
-
-function fromFirestoreFields(fields = {}) {
-  return Object.fromEntries(
-    Object.entries(fields).map(([key, value]) => [key, fromFirestoreValue(value)])
-  );
-}
-
-async function getCloudToken(force = false) {
-  if (!force && cloudToken && Date.now() < cloudTokenExpiresAt - 5 * 60 * 1000) {
-    return cloudToken;
-  }
-
-  const account = getGlobalDefaultAccount();
-  if (!account?.tokens?.refresh_token) {
-    throw new Error('Firebase CLI login is not available on this PC');
-  }
-
-  const tokens = await getAccessToken(
-    account.tokens.refresh_token,
-    [CLOUD_PLATFORM_SCOPE]
-  );
-  cloudToken = tokens.access_token;
-  cloudTokenExpiresAt = tokens.expires_at || Date.now() + (tokens.expires_in || 3600) * 1000;
-  return cloudToken;
-}
-
-async function runAdb(args) {
+function runAdb(args) {
   return new Promise((resolve, reject) => {
     execFile('C:\\platform-tools\\adb.exe', args, { windowsHide: true }, (error, stdout, stderr) => {
-      if (error) return reject(new Error(stderr || error.message));
+      if (error) return reject(new Error(stderr || error.message || 'ADB command failed'));
       resolve(stdout.trim());
     });
   });
-}
-
-async function getBridgeCommand(platform, forceToken = false) {
-  const token = await getCloudToken(forceToken);
-  const bridgeDocId = platform === 'fire-tv' ? '__bridge_fire_tv__' : '__bridge_samsung__';
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/pairingSessions/${bridgeDocId}`;
-  const response = await fetch(url, {
-    headers: { Authorization: 'Bearer ' + token },
-  });
-  if (response.status === 404) return null;
-  if (response.status === 401 && !forceToken) {
-    cloudToken = null;
-    return getBridgeCommand(platform, true);
-  }
-  if (!response.ok) throw new Error(`Firestore bridge read failed: HTTP ${response.status}`);
-  const document = await response.json();
-  return {
-    id: platform,
-    platform,
-    ...fromFirestoreFields(document.fields),
-  };
-}
-
-async function queryPairedSessions(forceToken = false) {
-  const token = await getCloudToken(forceToken);
-  // Only fetch native TV sessions. The previous query scanned every paired
-  // session on the account and hit Firestore HTTP 429 rate limits.
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: 'pairingSessions' }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: 'platform' },
-          op: 'IN',
-          value: {
-            arrayValue: {
-              values: [
-                { stringValue: 'fire-tv' },
-                { stringValue: 'samsung' },
-              ],
-            },
-          },
-        },
-      },
-    },
-  };
-
-  const response = await fetch(FIRESTORE_RUN_QUERY, {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (response.status === 401 && !forceToken) {
-    cloudToken = null;
-    return queryPairedSessions(true);
-  }
-  if (!response.ok) throw new Error(`Firestore query failed: HTTP ${response.status}`);
-
-  const rows = await response.json();
-  return rows
-    .filter(row => {
-      const fields = row.document?.fields || {};
-      return row.document && fields.status?.stringValue === 'paired';
-    })
-    .map(row => ({
-      id: row.document.name.split('/').pop(),
-      ...fromFirestoreFields(row.document.fields),
-    }));
 }
 
 function sleep(ms) {
@@ -175,10 +54,9 @@ async function launchPeacockTitle(title) {
   await runAdb(['-s', FIRE_TV, 'shell', 'am', 'start', '-n', component]);
   await sleep(3000);
 
-  // Use Peacock's own signed-in search UI because the Fire TV app does not expose a public title deep link.
-  for (let i = 0; i < 8; i += 1) await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '21']); // left
-  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '19']); // up
-  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // enter
+  for (let i = 0; i < 8; i += 1) await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '21']);
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '19']);
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']);
   await sleep(700);
 
   const searchText = String(title || '').trim().replace(/ /g, '%s');
@@ -186,13 +64,13 @@ async function launchPeacockTitle(title) {
   await runAdb(['-s', FIRE_TV, 'shell', 'input', 'text', searchText]);
   await sleep(500);
 
-  for (let i = 0; i < 4; i += 1) await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '20']); // down
-  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '21']); // left
-  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // select result
+  for (let i = 0; i < 4; i += 1) await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '20']);
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '21']);
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']);
   await sleep(1200);
-  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // open title
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']);
   await sleep(1200);
-  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']); // play
+  await runAdb(['-s', FIRE_TV, 'shell', 'input', 'keyevent', '66']);
   return 'peacock-title-playback';
 }
 
@@ -201,14 +79,10 @@ async function launchFireTv(command) {
   const uri = command.launchUri || '';
   console.log(`[FIRETV] ${command.title} / ${command.provider}`);
 
-  if (provider === 'peacock') {
-    return launchPeacockTitle(command.title);
-  }
+  if (provider === 'peacock') return launchPeacockTitle(command.title);
 
   if (provider === 'primevideo' &&
-      (uri.startsWith('amzn://') ||
-       uri.includes('app.primevideo.com/watch') ||
-       uri.includes('app.primevideo.com/detail'))) {
+      (uri.startsWith('amzn://') || uri.includes('app.primevideo.com/watch') || uri.includes('app.primevideo.com/detail'))) {
     const primeUri = uri.startsWith('amzn://')
       ? uri
       : uri.replace('https://app.primevideo.com/detail', 'amzn://avod/watch')
@@ -219,7 +93,7 @@ async function launchFireTv(command) {
   }
 
   if (provider === 'hulu') {
-    const match = uri.match(/S\.content_id=([^;]+)/);
+    const match = uri.match(/S\\.content_id=([^;]+)/);
     if (match) {
       await runAdb(['-s', FIRE_TV, 'shell', 'am', 'start', '-a', 'hulu.intent.action.PLAY_CONTENT',
         '-n', 'com.hulu.plus/.SplashActivity', '--es', 'content_id', decodeURIComponent(match[1])]);
@@ -284,80 +158,87 @@ async function launchSamsung(command) {
   return 'native-app';
 }
 
-async function poll() {
-  if (polling || Date.now() < nextPollAt) return;
-  polling = true;
+async function handleCommand(payload) {
+  const platform = payload?.platform;
+  const command = payload?.command;
+  if (!['fire-tv', 'samsung'].includes(platform)) throw new Error('Unsupported TV platform');
+  if (!command?.sentAt) throw new Error('TV command missing sentAt');
+
+  const key = `${platform}:${command.sentAt}`;
+  if (seenCommands.get(key)) return 'already-processed';
+  seenCommands.set(key, true);
 
   try {
-    const sessions = (await Promise.all(
-      ['fire-tv', 'samsung'].map(platform => getBridgeCommand(platform))
-    )).filter(Boolean);
-
-    if (!initialized) {
-      const now = Date.now();
-      for (const session of sessions) {
-        const command = session.command;
-        if (!command?.sentAt) continue;
-        const key = `${session.platform}:${session.id}`;
-        const ageMs = now - Number(command.sentAt);
-        if (ageMs > 0 && ageMs <= 10 * 60 * 1000) {
-          seen.set(key, command.sentAt);
-          try {
-            const result = session.platform === 'fire-tv'
-              ? await launchFireTv(command)
-              : await launchSamsung(command);
-            console.log(`[${session.platform.toUpperCase()}] STARTUP PASS ${command.title}: ${result}`);
-          } catch (error) {
-            console.error(`[${session.platform.toUpperCase()}] STARTUP FAIL ${command.title}: ${error.message}`);
-          }
-        } else {
-          seen.set(key, command.sentAt);
-        }
-      }
-      initialized = true;
-      console.log(`[BRIDGE] baseline captured: ${sessions.length} paired session(s)`);
-      return;
-    }
-
-    for (const session of sessions) {
-      if (!['fire-tv', 'samsung'].includes(session.platform)) continue;
-      const command = session.command;
-      if (!command?.sentAt) continue;
-
-      const key = `${session.platform}:${session.id}`;
-      if (seen.get(key) === command.sentAt) continue;
-      seen.set(key, command.sentAt);
-
-      try {
-        const result = session.platform === 'fire-tv'
-          ? await launchFireTv(command)
-          : await launchSamsung(command);
-        console.log(`[${session.platform.toUpperCase()}] PASS ${command.title}: ${result}`);
-      } catch (error) {
-        console.error(`[${session.platform.toUpperCase()}] FAIL ${command.title}: ${error.message}`);
-      }
-    }
+    const result = platform === 'fire-tv' ? await launchFireTv(command) : await launchSamsung(command);
+    console.log(`[${platform.toUpperCase()}] PASS ${command.title}: ${result}`);
+    return result;
   } catch (error) {
-    console.error(`[BRIDGE] poll error: ${error.message}`);
-    if (error.message.includes('HTTP 429')) {
-      nextPollAt = Date.now() + 10000;
-      console.error('[BRIDGE] Firestore rate limit; backing off for 10 seconds');
-    }
-  } finally {
-    polling = false;
+    seenCommands.delete(key);
+    console.error(`[${platform.toUpperCase()}] FAIL ${command.title}: ${error.message}`);
+    throw error;
   }
 }
 
+function startBridgeServer() {
+  const server = http.createServer(async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', 'https://stream-command-center-three.vercel.app');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      return res.end();
+    }
+
+    if (req.method === 'GET' && req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, bridge: 'firetv-samsung', port: PORT }));
+    }
+
+    if (req.method !== 'POST' || req.url !== '/command') {
+      res.writeHead(404);
+      return res.end();
+    }
+
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk;
+      if (body.length > 250000) req.destroy();
+    });
+    req.on('end', async () => {
+      try {
+        const result = await handleCommand(JSON.parse(body));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, result }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: error.message }));
+      }
+    });
+  });
+
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`[BRIDGE] local command relay listening on http://127.0.0.1:${PORT}`);
+  });
+}
+
+function launchBridgeBrowser() {
+  const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  const url = 'https://stream-command-center-three.vercel.app/?bridge=1';
+  execFile(chrome, ['--app=' + url], { windowsHide: true }, error => {
+    if (error) console.error('[BRIDGE] Could not open relay browser:', error.message);
+    else console.log('[BRIDGE] relay browser opened');
+  });
+}
+
 async function main() {
-  await runAdb(['connect', FIRE_TV]).catch(() => undefined);
-  await getCloudToken();
-  console.log('[BRIDGE] Firebase CLI auth ready');
+  startBridgeServer();
+  await runAdb(['connect', FIRE_TV]).catch(error => console.error('[BRIDGE] Fire TV ADB connect:', error.message));
   console.log('[BRIDGE] Fire TV + Samsung native handoff ready');
-  await poll();
-  setInterval(poll, 5000);
+  launchBridgeBrowser();
 }
 
 main().catch(error => {
-  console.error(`[BRIDGE] fatal: ${error.message}`);
+  console.error('[BRIDGE] fatal:', error.message);
   process.exit(1);
 });

@@ -253,6 +253,7 @@ function App() {
   const [accountForm, setAccountForm] = useState({ email: '', password: '' });
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
   const lastAutoLaunchCommand = useRef<number | null>(null);
+  const lastBridgeCommands = useRef<Record<string, number>>({});
 
   useEffect(() => { localStorage.setItem('stream-connected', JSON.stringify(connected)); }, [connected]);
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
@@ -342,8 +343,43 @@ function App() {
     startTvPairing(null, tvPlatform).catch(() => undefined);
   }, [receiverRequested, authReady, pairingCode, tvPlatform]);
 
+  const bridgeMode = new URLSearchParams(window.location.search).get('bridge') === '1';
+
   useEffect(() => {
-    if (!pairingCode || !authReady) return;
+    if (!bridgeMode || !authReady) return;
+    const cleanups = (['fire-tv', 'samsung'] as const).map(platform => {
+      const bridgeDocId = platform === 'fire-tv' ? '__bridge_fire_tv__' : '__bridge_samsung__';
+      return onSnapshot(doc(db, 'pairingSessions', bridgeDocId), snapshot => {
+        if (!snapshot.exists()) return;
+        const data = snapshot.data();
+        const command = data.command as TvCommand | undefined;
+        const sentAt = Number(command?.sentAt || 0);
+        if (data.status !== 'paired' || !command || !sentAt) return;
+        if (lastBridgeCommands.current[platform] === sentAt) return;
+        if (Date.now() - sentAt > PAIRING_SESSION_TTL_MS) {
+          lastBridgeCommands.current[platform] = sentAt;
+          return;
+        }
+        lastBridgeCommands.current[platform] = sentAt;
+        fetch('http://127.0.0.1:8787/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, command }),
+        }).then(async response => {
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          console.log(`[BRIDGE RELAY] ${platform} ${command.title}: ${result.result || 'sent'}`);
+        }).catch(error => {
+          console.error('[BRIDGE RELAY] command failed', error);
+          lastBridgeCommands.current[platform] = 0;
+        });
+      });
+    });
+    return () => cleanups.forEach(cleanup => cleanup());
+  }, [bridgeMode, authReady]);
+
+  useEffect(() => {
+    if (!pairingCode || !authReady || bridgeMode) return;
     const sessionRef = doc(db, 'pairingSessions', pairingCode);    return onSnapshot(sessionRef, snapshot => {
       if (!snapshot.exists()) return;
       const data = snapshot.data();
@@ -594,6 +630,10 @@ function App() {
     if (command.platform === 'fire-tv' || command.platform === 'samsung') return;
     if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
   }, [receiverMode, pairingSession?.command]);
+
+  if (bridgeMode) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#05060a] px-6 text-center text-white"><div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Stream Command Bridge</p><h1 className="mt-4 text-3xl font-semibold">Native TV relay active.</h1><p className="mt-2 text-sm text-white/40">This window listens for Fire TV and Samsung commands from your paired session.</p></div></div>;
+  }
 
   return (
     <div className="min-h-screen bg-[#08090d] text-white">
