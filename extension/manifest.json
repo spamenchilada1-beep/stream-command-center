@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Stream Command Watchlist Importer",
+  "version": "0.1.0",
+  "description": "Securely imports watchlist metadata into Stream Command Center.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://www.netflix.com/*",
+    "https://www.primevideo.com/*",
+    "https://www.disneyplus.com/*",
+    "https://www.hulu.com/*",
+    "https://www.max.com/*",
+    "https://www.paramountplus.com/*",
+    "https://www.peacocktv.com/*",
+    "https://tv.apple.com/*",
+    "https://www.tubitv.com/*",
+    "https://www.crunchyroll.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://stream-command-center-three.vercel.app/*"],
+      "js": ["scc-bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "externally_connectable": {
+    "matches": ["https://stream-command-center-three.vercel.app/*"]
+  }
+}

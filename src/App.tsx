@@ -263,6 +263,14 @@ function App() {
 
   useEffect(() => {
     if (!importNonce) return;
+    window.postMessage(
+      { source: 'stream-command-center', type: 'scc:import-start', nonce: importNonce },
+      window.location.origin,
+    );
+  }, [importNonce]);
+
+  useEffect(() => {
+    if (!importNonce) return;
     const handleImportMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (!isWatchlistImportMessage(event.data) || event.data.nonce !== importNonce) return;
