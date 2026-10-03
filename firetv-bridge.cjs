@@ -20,6 +20,7 @@ const samsungApps = {
   appletv: '3201807016597',
   tubi: '3KA0pm7a7V.TubiTV',
   youtube: '111299001912',
+  peacock: 'G20163014979',
 };
 
 const fireTvApps = {
@@ -39,6 +40,7 @@ let cloudToken = null;
 let cloudTokenExpiresAt = 0;
 let initialized = false;
 let polling = false;
+let nextPollAt = 0;
 
 function normalize(value) {
   return (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -250,7 +252,7 @@ async function launchSamsung(command) {
 }
 
 async function poll() {
-  if (polling) return;
+  if (polling || Date.now() < nextPollAt) return;
   polling = true;
 
   try {
@@ -288,6 +290,10 @@ async function poll() {
     }
   } catch (error) {
     console.error(`[BRIDGE] poll error: ${error.message}`);
+    if (error.message.includes('HTTP 429')) {
+      nextPollAt = Date.now() + 10000;
+      console.error('[BRIDGE] Firestore rate limit; backing off for 10 seconds');
+    }
   } finally {
     polling = false;
   }
@@ -299,7 +305,7 @@ async function main() {
   console.log('[BRIDGE] Firebase CLI auth ready');
   console.log('[BRIDGE] Fire TV + Samsung native handoff ready');
   await poll();
-  setInterval(poll, 1500);
+  setInterval(poll, 5000);
 }
 
 main().catch(error => {
