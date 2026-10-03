@@ -487,7 +487,6 @@ function App() {
 
       transaction.update(sessionRef, {
         status: 'paired',
-        platform: tvPlatform,
         phoneUserId: auth.currentUser!.uid,
         pairedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
