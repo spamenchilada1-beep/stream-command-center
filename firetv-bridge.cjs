@@ -259,10 +259,24 @@ async function poll() {
     const sessions = await queryPairedSessions();
 
     if (!initialized) {
+      const now = Date.now();
       for (const session of sessions) {
         const command = session.command;
-        if (['fire-tv', 'samsung'].includes(session.platform) && command?.sentAt) {
-          seen.set(`${session.platform}:${session.id}`, command.sentAt);
+        if (!['fire-tv', 'samsung'].includes(session.platform) || !command?.sentAt) continue;
+        const key = `${session.platform}:${session.id}`;
+        const ageMs = now - Number(command.sentAt);
+        if (ageMs > 0 && ageMs <= 2 * 60 * 1000) {
+          seen.set(key, command.sentAt);
+          try {
+            const result = session.platform === 'fire-tv'
+              ? await launchFireTv(command)
+              : await launchSamsung(command);
+            console.log(`[${session.platform.toUpperCase()}] STARTUP PASS ${command.title}: ${result}`);
+          } catch (error) {
+            console.error(`[${session.platform.toUpperCase()}] STARTUP FAIL ${command.title}: ${error.message}`);
+          }
+        } else {
+          seen.set(key, command.sentAt);
         }
       }
       initialized = true;
