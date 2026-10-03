@@ -6,6 +6,7 @@ import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updat
 import { auth, db } from './firebase';
 import { getProviderConnection } from './providerConnections';
 import { getAvailability, type AvailabilityResult } from './availability';
+import { createImportNonce, isWatchlistImportMessage, mergeImportedWatchlist, normalizeImportedItems } from './watchlistImporter';
 
 type Provider = {
   id: string;
@@ -252,11 +253,27 @@ function App() {
   const [accountMessage, setAccountMessage] = useState('');
   const [accountForm, setAccountForm] = useState({ email: '', password: '' });
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
+  const [importNonce, setImportNonce] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState('');
   const lastAutoLaunchCommand = useRef<number | null>(null);
   const lastBridgeCommands = useRef<Record<string, number>>({});
 
   useEffect(() => { localStorage.setItem('stream-connected', JSON.stringify(connected)); }, [connected]);
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
+
+  useEffect(() => {
+    if (!importNonce) return;
+    const handleImportMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!isWatchlistImportMessage(event.data) || event.data.nonce !== importNonce) return;
+      const imported = normalizeImportedItems(event.data.items);
+      setWatchlist(current => mergeImportedWatchlist(current, imported));
+      setImportMessage(`${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
+      setImportNonce(null);
+    };
+    window.addEventListener('message', handleImportMessage);
+    return () => window.removeEventListener('message', handleImportMessage);
+  }, [importNonce]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async user => {
@@ -697,7 +714,7 @@ function App() {
 
           {activeTab === 'watchlist' && <section>
             {tvConnectedNotice && <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span><div><p className="text-sm font-semibold text-emerald-200">TV connected</p><p className="text-xs text-white/40">Choose a title below to send it to your TV.</p></div></div><button onClick={() => setTvConnectedNotice(false)} className="rounded-full p-1.5 text-white/30 hover:bg-white/5 hover:text-white"><X size={16} /></button></div>}
-            <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><button onClick={() => { setImportMessage(''); setImportNonce(createImportNonce()); }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import watchlists</button></div>{importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session ready. Open the Stream Command browser extension to scan your signed-in streaming watchlists.</div>}{importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
           </section>}
         </main>
 
