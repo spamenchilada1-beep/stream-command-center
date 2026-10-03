@@ -348,7 +348,7 @@ function App() {
   useEffect(() => {
     if (!bridgeMode || !authReady) return;
     const cleanups = (['fire-tv', 'samsung'] as const).map(platform => {
-      const bridgeDocId = platform === 'fire-tv' ? '__bridge_fire_tv__' : '__bridge_samsung__';
+      const bridgeDocId = platform === 'fire-tv' ? 'bridge_fire_tv' : 'bridge_samsung';
       return onSnapshot(doc(db, 'pairingSessions', bridgeDocId), snapshot => {
         if (!snapshot.exists()) return;
         const data = snapshot.data();
@@ -582,7 +582,7 @@ function App() {
     };
     await updateDoc(doc(db, 'pairingSessions', code), { command });
     if (platform === 'fire-tv' || platform === 'samsung') {
-      const bridgeDocId = platform === 'fire-tv' ? '__bridge_fire_tv__' : '__bridge_samsung__';
+      const bridgeDocId = platform === 'fire-tv' ? 'bridge_fire_tv' : 'bridge_samsung';
       await setDoc(doc(db, 'pairingSessions', bridgeDocId), {
         status: 'paired',
         pairingCode: code,
