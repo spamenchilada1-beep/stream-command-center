@@ -52,7 +52,7 @@ function detectTvPlatform(): TvPlatform {
   if (ua.includes('tizen')) return 'samsung';
   if (ua.includes('web0s') || ua.includes('webos')) return 'lg';
   if (ua.includes('appletv') || ua.includes('apple tv')) return 'apple-tv';
-  if (ua.includes('aft') || ua.includes('fire tv') || ua.includes('silk')) return 'fire-tv';
+  if (ua.includes('aft') || ua.includes('fire tv') || ua.includes('silk') || /\baft[a-z0-9_-]*/.test(ua)) return 'fire-tv';
   if (ua.includes('android tv') || ua.includes('googletv') || ua.includes('google tv')) return 'google-tv';
   return 'browser';
 }
@@ -238,8 +238,9 @@ function App() {
   const [pairingCode, setPairingCode] = useState('');
   const [tvPaired, setTvPaired] = useState(false);
   const [pairingStatus, setPairingStatus] = useState<'idle' | 'waiting' | 'phone-ready' | 'paired'>('idle');
+  const [pairingError, setPairingError] = useState('');
   const [pairingSession, setPairingSession] = useState<any>(null);
-  const [tvPlatform, setTvPlatform] = useState<TvPlatform>('google-tv');
+  const [tvPlatform, setTvPlatform] = useState<TvPlatform>('browser');
   const [receiverMode, setReceiverMode] = useState(false);
   const [receiverRequested, setReceiverRequested] = useState(false);
   const [tvConnectedNotice, setTvConnectedNotice] = useState(false);
@@ -347,6 +348,7 @@ function App() {
       if (!snapshot.exists()) return;
       const data = snapshot.data();
       setPairingSession(data);
+      if (tvPlatforms.some(item => item.id === data.platform)) setTvPlatform(data.platform as TvPlatform);
       if (data.status === 'paired') {
         const isTvOwner = data.tvUserId === auth.currentUser?.uid;
         const isPhoneOwner = data.phoneUserId === auth.currentUser?.uid;
@@ -436,6 +438,7 @@ function App() {
     setTvPlatform(platform);
     const code = String(Math.floor(100000 + Math.random() * 900000));
     setPairingCode(code);
+    setPairingError('');
     setTvPaired(false);
     setPairingStatus('waiting');
     setPairingSession(null);
@@ -457,17 +460,20 @@ function App() {
   };
   const confirmPhonePairing = async () => {
     if (!pairingCode) return;
+    setPairingError('');
     if (!auth.currentUser) {
       try {
         await signInAnonymously(auth);
       } catch (error) {
         console.error('Anonymous phone pairing sign-in failed', error);
+        setPairingError('We could not connect this phone to the TV session.');
         return;
       }
     }
 
     const sessionRef = doc(db, 'pairingSessions', pairingCode);
-    const claimed = await runTransaction(db, async transaction => {
+    try {
+      const claimed = await runTransaction(db, async transaction => {
       const snapshot = await transaction.get(sessionRef);
       if (!snapshot.exists()) return false;
 
@@ -494,18 +500,23 @@ function App() {
       return true;
     });
 
-    if (!claimed) {
-      setPairingStatus('idle');
-      setPairingSession(null);
-      return;
-    }
+      if (!claimed) {
+        setPairingStatus('idle');
+        setPairingSession(null);
+        setPairingError('This TV pairing code is no longer available. Start a new TV pairing session.');
+        return;
+      }
 
-    localStorage.setItem('stream-tv-session', pairingCode);
-    setTvPaired(true);
-    setPairingStatus('paired');
-    setShowTv(false);
-    setActiveTab('watchlist');
-    setTvConnectedNotice(true);
+      localStorage.setItem('stream-tv-session', pairingCode);
+      setTvPaired(true);
+      setPairingStatus('paired');
+      setShowTv(false);
+      setActiveTab('watchlist');
+      setTvConnectedNotice(true);
+    } catch (error) {
+      console.error('TV pairing confirmation failed', error);
+      setPairingError('We could not complete the TV pairing. The TV session was not changed.');
+    }
   };
 
   const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null) => {
@@ -690,7 +701,7 @@ function App() {
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden py-2">
             <div className="max-h-full w-full max-w-5xl overflow-y-auto overscroll-contain">              {pairingStatus === 'waiting' && <div className="flex w-full flex-col items-center justify-start pt-2 text-center">
                 <div className="rounded-[1.5rem] border border-white/10 bg-white p-4 shadow-2xl">
-                  <QRCodeSVG value={window.location.origin + '/?pair=' + pairingCode} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
+                  <QRCodeSVG value={`${window.location.origin}/?pair=${pairingCode}&platform=${encodeURIComponent(tvPlatform)}`} size={270} bgColor="#ffffff" fgColor="#000000" includeMargin />
                 </div>
                 <div className="mt-3 inline-flex flex-col items-center rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-2">
                   <span className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/60">Pairing code</span>
@@ -739,13 +750,14 @@ function App() {
             <p className="mt-2 text-sm leading-6 text-white/45">This device found a live TV pairing session. Confirm once to connect it.</p>
             {pairingSession?.title && <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-white/35">TV is waiting for</p><p className="mt-1 font-semibold">{pairingSession.title}</p><p className="text-xs text-white/35">{pairingSession.provider}</p></div>}
             <button onClick={confirmPhonePairing} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Pair this TV</button>
+            {pairingError && <p className="mt-3 text-sm text-rose-200">{pairingError}</p>}
           </> : pairingStatus === 'waiting' ? <>
-            <div className="mx-auto rounded-2xl border border-white/15 bg-white/[0.04] p-3"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}`} size={170} bgColor="transparent" fgColor="#ffffff" includeMargin /></div>
+            <div className="mx-auto rounded-2xl border border-white/15 bg-white/[0.04] p-3"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}&platform=${encodeURIComponent(tvPlatform)}`} size={170} bgColor="transparent" fgColor="#ffffff" includeMargin /></div>
             <p className="mt-5 font-semibold">Scan to connect your phone</p>
             <p className="mt-2 text-sm leading-6 text-white/45">Open the camera on your phone and scan this code. The TV session will update automatically when the phone confirms.</p>
             <div className="mx-auto mt-5 inline-flex items-center rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-3 font-mono text-2xl font-semibold tracking-[0.3em] text-cyan-200">{pairingCode}</div>
             <p className="mt-2 text-[11px] text-white/30">Live Firestore pairing session</p>
-            <button onClick={() => navigator.clipboard?.writeText(`${window.location.origin}${window.location.pathname}?pair=${pairingCode}`)} className="mt-5 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5">Copy pairing link</button>
+            <button onClick={() => navigator.clipboard?.writeText(`${window.location.origin}${window.location.pathname}?pair=${pairingCode}&platform=${encodeURIComponent(tvPlatform)}`)} className="mt-5 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5">Copy pairing link</button>
           </> : <>
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={30} /></div>            <p className="mt-5 font-semibold">Living Room TV is paired</p>
             <p className="mt-2 text-sm leading-6 text-white/45">This device is now connected to the live TV session.</p>
