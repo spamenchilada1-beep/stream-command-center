@@ -265,6 +265,7 @@ function App() {
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
   const [importNonce, setImportNonce] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
+  const importNonceRef = useRef<string | null>(null);
   const lastAutoLaunchCommand = useRef<number | null>(null);
   const lastBridgeCommands = useRef<Record<string, number>>({});
 
@@ -272,18 +273,21 @@ function App() {
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
 
   useEffect(() => {
-    if (!importNonce) return;
     const handleImportMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      if (!isWatchlistImportMessage(event.data) || event.data.nonce !== importNonce) return;
+      if (!isWatchlistImportMessage(event.data)) return;
+      if (event.data.nonce !== importNonceRef.current) return;
+
       const imported = normalizeImportedItems(event.data.items);
       setWatchlist(current => mergeImportedWatchlist(current, imported));
       setImportMessage(`${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
+      importNonceRef.current = null;
       setImportNonce(null);
     };
+
     window.addEventListener('message', handleImportMessage);
     return () => window.removeEventListener('message', handleImportMessage);
-  }, [importNonce]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async user => {
@@ -727,6 +731,7 @@ function App() {
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><button onClick={async () => {
               setImportMessage('');
               const nonce = createImportNonce();
+              importNonceRef.current = nonce;
               setImportNonce(nonce);
               const runtime = getChromeRuntimeBridge();
               if (!runtime) {
