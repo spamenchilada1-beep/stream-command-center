@@ -223,7 +223,7 @@ const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const SCC_IMPORT_EXTENSION_ID = 'fhcjfhfhdcnknkikepklmgpmcenallmm';
 
 type ChromeRuntimeBridge = {
-  sendMessage: (extensionId: string, message: unknown) => Promise<{ ok?: boolean; accepted?: boolean; scanCount?: number; importedCount?: number; reason?: string }>;
+  sendMessage: (extensionId: string, message: unknown) => Promise<{ ok?: boolean; accepted?: boolean; allTabCount?: number; providerTabCount?: number; scanCount?: number; importedCount?: number; reason?: string }>;
 };
 
 function getChromeRuntimeBridge(): ChromeRuntimeBridge | null {
@@ -749,7 +749,9 @@ function App() {
                 }
                 const scanned = result.scanCount ?? 0;
                 if (scanned === 0) {
-                  setImportMessage('No supported provider tabs were found. Keep a supported streaming service open and try again.');
+                  setImportMessage(
+                    `Importer sees ${result.allTabCount ?? 0} browser tabs, but ${result.providerTabCount ?? 0} supported provider tabs. Netflix must be visible in this same Chrome profile.`,
+                  );
                 }
               } catch {
                 setImportMessage('Importer connection failed. The extension is not available to this browser page.');

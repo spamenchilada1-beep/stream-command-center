@@ -98,11 +98,23 @@ async function scanNetflixTab(tabId) {
 }
 
 async function sendToProviderTabs(nonce, sccTabId) {
-  const tabs = await chrome.tabs.query({ url: PROVIDER_URLS });
+  const allTabs = await chrome.tabs.query({});
+  const providerTabs = allTabs.filter(tab =>
+    typeof tab.url === 'string' && PROVIDER_URLS.some(pattern => {
+      const origin = pattern.replace('/*', '');
+      return tab.url.startsWith(origin);
+    })
+  );
+
   let scanCount = 0;
   let importedCount = 0;
+  const visibleProviderTabs = providerTabs.map(tab => ({
+    id: tab.id,
+    url: tab.url,
+    title: tab.title || '',
+  }));
 
-  for (const tab of tabs) {
+  for (const tab of providerTabs) {
     if (!tab.id || !tab.url) continue;
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
@@ -120,7 +132,7 @@ async function sendToProviderTabs(nonce, sccTabId) {
     }
   }
 
-  return { providerTabCount: tabs.length, scanCount, importedCount };
+  return { allTabCount: allTabs.length, providerTabCount: providerTabs.length, scanCount, importedCount, visibleProviderTabs };
 }
 
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
