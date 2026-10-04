@@ -103,6 +103,8 @@ async function sendToProviderTabs(nonce, sccTabId) {
 
   let scanCount = 0;
   let importedCount = 0;
+  const scanErrors = [];
+  const deliveryErrors = [];
   const visibleProviderTabs = providerTabs.map(tab => ({
     id: tab.id,
     url: tab.url,
@@ -113,21 +115,46 @@ async function sendToProviderTabs(nonce, sccTabId) {
     if (!tab.id || !tab.url) continue;
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
+      let items;
       try {
-        const items = await scanNetflixTab(tab.id);
+        items = await scanNetflixTab(tab.id);
+        scanCount += 1;
+      } catch (error) {
+        scanErrors.push({
+          tabId: tab.id,
+          url: tab.url,
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        });
+        continue;
+      }
+
+      try {
         await sendImportToScc(sccTabId, {
           source: 'stream-command-extension',
           type: 'scc:watchlist-import',
           nonce,
           items,
         });
-        scanCount += 1;
         importedCount += items.length;
-      } catch {}
+      } catch (error) {
+        deliveryErrors.push({
+          tabId: tab.id,
+          url: tab.url,
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        });
+      }
     }
   }
 
-  return { allTabCount: allTabs.length, providerTabCount: providerTabs.length, scanCount, importedCount, visibleProviderTabs };
+  return {
+    allTabCount: allTabs.length,
+    providerTabCount: providerTabs.length,
+    scanCount,
+    importedCount,
+    scanErrors,
+    deliveryErrors,
+    visibleProviderTabs,
+  };
 }
 
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {

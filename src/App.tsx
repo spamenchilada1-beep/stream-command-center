@@ -223,7 +223,17 @@ const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const SCC_IMPORT_EXTENSION_ID = 'fhcjfhfhdcnknkikepklmgpmcenallmm';
 
 type ChromeRuntimeBridge = {
-  sendMessage: (extensionId: string, message: unknown) => Promise<{ ok?: boolean; accepted?: boolean; allTabCount?: number; providerTabCount?: number; scanCount?: number; importedCount?: number; reason?: string }>;
+  sendMessage: (extensionId: string, message: unknown) => Promise<{
+    ok?: boolean;
+    accepted?: boolean;
+    allTabCount?: number;
+    providerTabCount?: number;
+    scanCount?: number;
+    importedCount?: number;
+    scanErrors?: Array<{ tabId?: number; url?: string; error?: string }>;
+    deliveryErrors?: Array<{ tabId?: number; url?: string; error?: string }>;
+    reason?: string;
+  }>;
 };
 
 function getChromeRuntimeBridge(): ChromeRuntimeBridge | null {
@@ -748,10 +758,16 @@ function App() {
                   return;
                 }
                 const scanned = result.scanCount ?? 0;
+                const scanError = result.scanErrors?.[0]?.error;
+                const deliveryError = result.deliveryErrors?.[0]?.error;
                 if (scanned === 0) {
                   setImportMessage(
-                    `Importer sees ${result.allTabCount ?? 0} browser tabs, but ${result.providerTabCount ?? 0} supported provider tabs. Netflix must be visible in this same Chrome profile.`,
+                    scanError
+                      ? `Netflix tab found, but the scan failed: ${scanError}`
+                      : `Importer sees ${result.allTabCount ?? 0} browser tabs, but ${result.providerTabCount ?? 0} supported provider tabs. Netflix must be visible in this same Chrome profile.`,
                   );
+                } else if (deliveryError) {
+                  setImportMessage(`Netflix was scanned, but SCC could not receive the results: ${deliveryError}`);
                 }
               } catch {
                 setImportMessage('Importer connection failed. The extension is not available to this browser page.');
