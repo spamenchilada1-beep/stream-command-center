@@ -15,7 +15,8 @@
     "https://www.peacocktv.com/*",
     "https://tv.apple.com/*",
     "https://www.tubitv.com/*",
-    "https://www.crunchyroll.com/*"
+    "https://www.crunchyroll.com/*",
+    "https://stream-command-center-three.vercel.app/*"
   ],
   "background": {
     "service_worker": "service-worker.js"
