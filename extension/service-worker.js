@@ -27,7 +27,7 @@ async function findSccTab(preferredTabId) {
 }
 
 
-async function scanNetflixTab(tabId, nonce) {
+async function requestNetflixScan(tabId, nonce) {
   const started = Date.now();
   let lastError = null;
   let reloaded = false;
@@ -38,10 +38,10 @@ async function scanNetflixTab(tabId, nonce) {
         type: 'scc:provider-scan',
         nonce,
       });
-      if (!response?.ok) {
-        throw new Error(response?.error || 'Netflix reader returned no results.');
+      if (!response?.ok || response.accepted !== true) {
+        throw new Error(response?.error || 'Netflix reader did not acknowledge the scan.');
       }
-      return Array.isArray(response.items) ? response : { ...response, items: [] };
+      return response;
     } catch (error) {
       lastError = error;
       if (!reloaded && String(error?.message || error).includes('Receiving end does not exist')) {
@@ -56,6 +56,22 @@ async function scanNetflixTab(tabId, nonce) {
 
   throw lastError || new Error('Netflix reader did not become available.');
 }
+
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type !== 'provider-watchlist-items') return;
+  if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
+  if (!Array.isArray(message.items)) return;
+
+  const session = sessions.get(message.nonce);
+  if (!session || !sender.tab?.id || sender.tab.id !== session.providerTabId) return;
+
+  chrome.tabs.sendMessage(session.sccTabId, {
+    source: 'stream-command-extension',
+    type: 'scc:watchlist-import',
+    nonce: message.nonce,
+    items: message.items,
+  }).catch(() => {});
+});
 
 async function sendToProviderTabs(nonce, sccTabId) {
   const providerTabs = await chrome.tabs.query({ url: PROVIDER_URLS });
@@ -75,31 +91,11 @@ async function sendToProviderTabs(nonce, sccTabId) {
     if (!tab.id || !tab.url) continue;
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
-      let scan;
       try {
-        scan = await scanNetflixTab(tab.id, nonce);
+        await requestNetflixScan(tab.id, nonce);
         scanCount += 1;
       } catch (error) {
         scanErrors.push({
-          tabId: tab.id,
-          url: tab.url,
-          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-        });
-        continue;
-      }
-
-      const items = Array.isArray(scan?.items) ? scan.items : [];
-
-      try {
-        await chrome.tabs.sendMessage(sccTabId, {
-          source: 'stream-command-extension',
-          type: 'scc:watchlist-import',
-          nonce,
-          items,
-        });
-        importedCount += items.length;
-      } catch (error) {
-        deliveryErrors.push({
           tabId: tab.id,
           url: tab.url,
           error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
@@ -138,8 +134,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         return;
       }
 
+      const providerTab = await chrome.tabs.query({ url: PROVIDER_URLS });
       sessions.set(message.nonce, {
         sccTabId: sccTab.id,
+        providerTabId: providerTab.find(tab => typeof tab.url === 'string' && tab.url.startsWith('https://www.netflix.com/'))?.id || null,
         startedAt: Date.now(),
       });
 
