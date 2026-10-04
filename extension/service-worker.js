@@ -26,76 +26,6 @@ async function findSccTab(preferredTabId) {
   return tabs.find(tab => tab.active) || tabs[0] || null;
 }
 
-async function sendImportToScc(tabId, payload) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    world: 'MAIN',
-    func: data => {
-      window.postMessage(data, window.location.origin);
-    },
-    args: [payload],
-  });
-}
-
-async function scanNetflixTab(tabId) {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId },
-    world: 'ISOLATED',
-    func: async () => {
-      const cleanText = value => (value || '').replace(/\s+/g, ' ').trim();
-      const selectors = [
-        '.title-card a[aria-label]',
-        '.title-card[aria-label]',
-        '.slider a[aria-label]',
-        '.slider [aria-label]',
-        'a[href*="/title/"]',
-      ];
-
-      const collect = () => {
-        const items = [];
-        const seen = new Set();
-
-        for (const selector of selectors) {
-          document.querySelectorAll(selector).forEach(element => {
-            const anchor = element.closest('a') || element;
-            const href = anchor.getAttribute('href') || '';
-            const ariaLabel =
-              element.getAttribute('aria-label') ||
-              anchor.getAttribute('aria-label') ||
-              anchor.getAttribute('title') ||
-              '';
-            const title = cleanText(ariaLabel);
-
-            if (!title || title.length > 300) return;
-
-            const idMatch = href.match(/\/title\/(\d+)/);
-            const id = idMatch
-              ? `netflix-${idMatch[1]}`
-              : `netflix-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
-
-            if (seen.has(id)) return;
-            seen.add(id);
-            items.push({ id, title, type: 'Series', provider: 'Netflix' });
-          });
-        }
-
-        return items;
-      };
-
-      const started = Date.now();
-      let items = collect();
-
-      while (items.length === 0 && Date.now() - started < 6000) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        items = collect();
-      }
-
-      return items;
-    },
-  });
-
-  return Array.isArray(results?.[0]?.result) ? results[0].result : [];
-}
 
 async function sendToProviderTabs(nonce, sccTabId) {
   const providerTabs = await chrome.tabs.query({ url: PROVIDER_URLS });
@@ -115,9 +45,12 @@ async function sendToProviderTabs(nonce, sccTabId) {
     if (!tab.id || !tab.url) continue;
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
-      let items;
+      let scan;
       try {
-        items = await scanNetflixTab(tab.id);
+        scan = await chrome.tabs.sendMessage(tab.id, {
+          type: 'scc:provider-scan',
+          nonce,
+        });
         scanCount += 1;
       } catch (error) {
         scanErrors.push({
@@ -128,8 +61,10 @@ async function sendToProviderTabs(nonce, sccTabId) {
         continue;
       }
 
+      const items = Array.isArray(scan?.items) ? scan.items : [];
+
       try {
-        await sendImportToScc(sccTabId, {
+        await chrome.tabs.sendMessage(sccTabId, {
           source: 'stream-command-extension',
           type: 'scc:watchlist-import',
           nonce,

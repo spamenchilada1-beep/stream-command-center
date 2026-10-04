@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "description": "Securely imports watchlist metadata into Stream Command Center.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9GYu7UUqrgqgG7+VFP1JQok4Nh2i4oHWpdQ/44tNAN7KNM4v5CZDtNuECsZKTg+MbZw4P6ZaiBbdQmfEICaqagL9VfZC4IUgg9/KKiu9s5hN2RW2cFpjraF7gaU+PT7yc6UM6GV8XwkVSlfvkaMct/QWpWY2otY4OUDt1OO6o4RwRIzAj6gEsiJlWwVWlQqLeUobxaHS6+lW7dCMhQICmUiNf5BwcaLMV9CU1nAgINDCxosEwYBz/Mic3UNOP+2Cj3I5RUr/gjV3m7hkT0IVCAhYBds44aDHVMmWmYeHnoVCYNrzjEawl6iBsriZ0dLKPrdjeGq++0LrtafKb7+4HwIDAQAB",
-  "permissions": ["storage", "tabs", "scripting"],
+  "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://www.netflix.com/*",
     "https://www.primevideo.com/*",
@@ -21,6 +21,18 @@
   "background": {
     "service_worker": "service-worker.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["netflix-reader.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://stream-command-center-three.vercel.app/*"],
+      "js": ["scc-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "externally_connectable": {
     "matches": ["https://stream-command-center-three.vercel.app/*"]
   }

@@ -69,13 +69,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
 
   waitForNetflixItems().then(items => {
-    chrome.runtime.sendMessage({
-      type: 'provider-watchlist-items',
-      nonce: message.nonce,
-      items,
-    }).catch(() => {});
-
-    sendResponse({ ok: true, count: items.length });
+    sendResponse({ ok: true, count: items.length, items });
+  }).catch(error => {
+    sendResponse({
+      ok: false,
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    });
   });
 
   return true;
