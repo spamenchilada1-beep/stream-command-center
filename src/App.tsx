@@ -223,7 +223,7 @@ const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const SCC_IMPORT_EXTENSION_ID = 'fhcjfhfhdcnknkikepklmgpmcenallmm';
 
 type ChromeRuntimeBridge = {
-  sendMessage: (extensionId: string, message: unknown) => Promise<{ ok?: boolean; accepted?: boolean; scanCount?: number; reason?: string }>;
+  sendMessage: (extensionId: string, message: unknown) => Promise<{ ok?: boolean; accepted?: boolean; scanCount?: number; importedCount?: number; reason?: string }>;
 };
 
 function getChromeRuntimeBridge(): ChromeRuntimeBridge | null {
@@ -743,11 +743,9 @@ function App() {
                   return;
                 }
                 const scanned = result.scanCount ?? 0;
-                setImportMessage(
-                  scanned > 0
-                    ? `Import scan started. ${scanned} supported provider tab${scanned === 1 ? '' : 's'} scanned.`
-                    : `No supported provider tabs were found. Keep a supported streaming service open and try again.`,
-                );
+                if (scanned === 0) {
+                  setImportMessage('No supported provider tabs were found. Keep a supported streaming service open and try again.');
+                }
               } catch {
                 setImportMessage('Importer connection failed. The extension is not available to this browser page.');
               }

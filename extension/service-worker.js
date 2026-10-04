@@ -37,11 +37,11 @@ async function sendImportToScc(tabId, payload) {
   });
 }
 
-async function scanNetflixTab(tabId, nonce) {
-  await chrome.scripting.executeScript({
+async function scanNetflixTab(tabId) {
+  const results = await chrome.scripting.executeScript({
     target: { tabId },
     world: 'ISOLATED',
-    func: async importNonce => {
+    func: async () => {
       const cleanText = value => (value || '').replace(/\s+/g, ' ').trim();
       const selectors = [
         '.title-card a[aria-label]',
@@ -90,60 +90,38 @@ async function scanNetflixTab(tabId, nonce) {
         items = collect();
       }
 
-      await chrome.runtime.sendMessage({
-        type: 'provider-watchlist-items',
-        nonce: importNonce,
-        items,
-      });
+      return items;
     },
-    args: [nonce],
   });
+
+  return Array.isArray(results?.[0]?.result) ? results[0].result : [];
 }
 
-async function sendToProviderTabs(nonce) {
+async function sendToProviderTabs(nonce, sccTabId) {
   const tabs = await chrome.tabs.query({ url: PROVIDER_URLS });
   let scanCount = 0;
+  let importedCount = 0;
 
   for (const tab of tabs) {
     if (!tab.id || !tab.url) continue;
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
       try {
-        await scanNetflixTab(tab.id, nonce);
+        const items = await scanNetflixTab(tab.id);
+        await sendImportToScc(sccTabId, {
+          source: 'stream-command-extension',
+          type: 'scc:watchlist-import',
+          nonce,
+          items,
+        });
         scanCount += 1;
+        importedCount += items.length;
       } catch {}
     }
   }
 
-  return { providerTabCount: tabs.length, scanCount };
+  return { providerTabCount: tabs.length, scanCount, importedCount };
 }
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== 'provider-watchlist-items' || !Array.isArray(message.items)) return;
-
-  const session = sessions.get(message.nonce);
-
-  if (!session || Date.now() - session.startedAt > 5 * 60 * 1000) {
-    sendResponse({ ok: false, reason: 'no-active-session' });
-    return;
-  }
-
-  if (sender.tab?.id === session.sccTabId) {
-    sendResponse({ ok: false, reason: 'invalid-provider-tab' });
-    return;
-  }
-
-  sendImportToScc(session.sccTabId, {
-    source: 'stream-command-extension',
-    type: 'scc:watchlist-import',
-    nonce: session.nonce,
-    items: message.items,
-  })
-    .then(() => sendResponse({ ok: true }))
-    .catch(() => sendResponse({ ok: false, reason: 'scc-delivery-failed' }));
-
-  return true;
-});
 
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
   const senderOrigin = sender.origin || (sender.url ? new URL(sender.url).origin : '');
@@ -169,7 +147,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         startedAt: Date.now(),
       });
 
-      const result = await sendToProviderTabs(message.nonce);
+      const result = await sendToProviderTabs(message.nonce, sccTab.id);
       sendResponse({ ok: true, accepted: true, ...result });
     })
     .catch(() => sendResponse({ ok: false, reason: 'import-start-failed' }));
