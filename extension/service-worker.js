@@ -27,6 +27,36 @@ async function findSccTab(preferredTabId) {
 }
 
 
+async function scanNetflixTab(tabId, nonce) {
+  const started = Date.now();
+  let lastError = null;
+  let reloaded = false;
+
+  while (Date.now() - started < 8000) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: 'scc:provider-scan',
+        nonce,
+      });
+      if (!response?.ok) {
+        throw new Error(response?.error || 'Netflix reader returned no results.');
+      }
+      return Array.isArray(response.items) ? response : { ...response, items: [] };
+    } catch (error) {
+      lastError = error;
+      if (!reloaded && String(error?.message || error).includes('Receiving end does not exist')) {
+        reloaded = true;
+        try {
+          await chrome.tabs.reload(tabId);
+        } catch {}
+      }
+      await new Promise(resolve => setTimeout(resolve, 750));
+    }
+  }
+
+  throw lastError || new Error('Netflix reader did not become available.');
+}
+
 async function sendToProviderTabs(nonce, sccTabId) {
   const providerTabs = await chrome.tabs.query({ url: PROVIDER_URLS });
   const allTabs = await chrome.tabs.query({});
@@ -47,10 +77,7 @@ async function sendToProviderTabs(nonce, sccTabId) {
     if (tab.url.startsWith('https://www.netflix.com/')) {
       let scan;
       try {
-        scan = await chrome.tabs.sendMessage(tab.id, {
-          type: 'scc:provider-scan',
-          nonce,
-        });
+        scan = await scanNetflixTab(tab.id, nonce);
         scanCount += 1;
       } catch (error) {
         scanErrors.push({
