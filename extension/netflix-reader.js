@@ -1,4 +1,11 @@
+const MY_LIST_SECTION_SELECTORS = [
+  '[data-uia="browse-page-sections"] > section[data-uia="carousel-row-section-1"]',
+  '[data-uia="browse-page-sections"] section[data-uia="carousel-row-section-1"]',
+  'section[data-uia="carousel-row-section-1"]',
+];
+
 const TITLE_SELECTORS = [
+  'a[data-uia="standard-card"][href]',
   '.galleryLockups .rowContainer.rowContainer_title_card .slider-item .ptrack-content a[aria-label]',
   '.slider-item .slider-refocus[aria-label]',
   '.slider-item a[aria-label]',
@@ -22,74 +29,98 @@ function normalizeTitle(value) {
   return title;
 }
 
-function getNetflixItems() {
+function getNetflixItems(section) {
   const items = [];
   const seen = new Set();
-  const selectorCounts = Object.fromEntries(
-    TITLE_SELECTORS.map(selector => [selector, document.querySelectorAll(selector).length]),
-  );
+  const cards = section
+    ? section.querySelectorAll('a[data-uia="standard-card"][href]')
+    : document.querySelectorAll('a[data-uia="standard-card"][href]');
 
-  for (const selector of TITLE_SELECTORS) {
-    document.querySelectorAll(selector).forEach(element => {
-      const anchor = element.closest('a') || element.querySelector('a') || element;
-      const href = anchor.getAttribute('href') || '';
-      const title = normalizeTitle(
-        element.getAttribute('aria-label') ||
-        anchor.getAttribute('aria-label') ||
-        anchor.getAttribute('title') ||
-        element.textContent,
-      );
+  cards.forEach(card => {
+    const href = card.getAttribute('href') || '';
+    const url = new URL(href, location.href);
+    const videoId = url.searchParams.get('jbv') || href.match(/\/title\/(\d+)/)?.[1] || '';
+    const title = normalizeTitle(
+      card.getAttribute('aria-label') ||
+      card.getAttribute('title') ||
+      card.querySelector('img')?.getAttribute('alt') ||
+      '',
+    );
 
-      if (!title) return;
+    if (!videoId || !title) return;
 
-      const idMatch = href.match(/\/(?:title|watch)\/(\d+)/);
-      const id = idMatch
-        ? `netflix-${idMatch[1]}`
-        : `netflix-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+    const id = `netflix-${videoId}`;
+    if (seen.has(id)) return;
+    seen.add(id);
 
-      if (seen.has(id)) return;
-      seen.add(id);
-
-      items.push({
-        id,
-        title,
-        type: 'Series',
-        provider: 'Netflix',
-      });
+    items.push({
+      id,
+      title,
+      type: 'Series',
+      provider: 'Netflix',
     });
+  });
+
+  return items;
+}
+
+function findMyListSection() {
+  for (const selector of MY_LIST_SECTION_SELECTORS) {
+    const section = document.querySelector(selector);
+    if (section) return section;
   }
 
-  return {
-    items,
-    selectorCounts,
-    watchLinkCount: document.querySelectorAll('a[href*="/watch/"]').length,
-    ariaLabelCount: document.querySelectorAll('[aria-label]').length,
-  };
+  const sections = document.querySelectorAll('[data-uia="browse-page-sections"] section');
+  for (const section of sections) {
+    const heading = cleanTitle(
+      section.querySelector('h2, [data-uia*="section+title"]')?.textContent || '',
+    );
+    if (/\bmy list\b/i.test(heading)) return section;
+  }
+
+  return null;
 }
 
 async function waitForNetflixItems(timeoutMs = 12000) {
   const started = Date.now();
-  let lastCount = 0;
-  let stableChecks = 0;
-  let scan = getNetflixItems();
+  const seen = new Map();
+  let section = findMyListSection();
 
   while (Date.now() - started < timeoutMs) {
-    scan = getNetflixItems();
-    const items = scan.items;
-    if (items.length > lastCount) {
-      lastCount = items.length;
-      stableChecks = 0;
-    } else {
-      stableChecks += 1;
+    section = section?.isConnected ? section : findMyListSection();
+    const items = getNetflixItems(section);
+
+    for (const item of items) {
+      if (!seen.has(item.id)) seen.set(item.id, item);
     }
 
-    if (items.length > 0 && stableChecks >= 3) return scan;
+    const rightButton = section?.querySelector('[data-uia="carousel-hawkins-right-button"]');
+    const before = seen.size;
 
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
-    await new Promise(resolve => setTimeout(resolve, 500));
+    if (rightButton && !rightButton.disabled) {
+      rightButton.click();
+      await new Promise(resolve => setTimeout(resolve, 350));
+      if (seen.size === before && Date.now() - started > 3000) break;
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 400));
+      if (seen.size === before) break;
+    }
+
+    if (section && !rightButton) break;
   }
 
-  return scan;
+  const finalSection = section || findMyListSection();
+  return {
+    items: [...seen.values()],
+    selectorCounts: {
+      myListSection: finalSection ? 1 : 0,
+      standardCards: finalSection
+        ? finalSection.querySelectorAll('a[data-uia="standard-card"][href]').length
+        : document.querySelectorAll('a[data-uia="standard-card"][href]').length,
+    },
+    watchLinkCount: document.querySelectorAll('a[href*="/watch/"]').length,
+    ariaLabelCount: document.querySelectorAll('[aria-label]').length,
+  };
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
