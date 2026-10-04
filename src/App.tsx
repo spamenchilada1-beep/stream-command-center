@@ -290,7 +290,28 @@ function App() {
 
       const imported = normalizeImportedItems(event.data.items);
       setWatchlist(current => mergeImportedWatchlist(current, imported));
-      setImportMessage(`${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
+
+      const diagnostics = event.data.diagnostics as {
+        url?: string;
+        title?: string;
+        readyState?: string;
+        visibilityState?: string;
+        selectorCounts?: Record<string, number>;
+        watchLinkCount?: number;
+        ariaLabelCount?: number;
+      } | null;
+
+      if (imported.length === 0 && diagnostics) {
+        const path = diagnostics.url ? new URL(diagnostics.url).pathname : 'unknown';
+        const sliderHits = diagnostics.selectorCounts?.['.slider-item .slider-refocus[aria-label]'] ?? 0;
+        const titleCardHits = diagnostics.selectorCounts?.['.title-card a[aria-label]'] ?? 0;
+        setImportMessage(
+          `0 titles imported. Netflix: ${path}; visibility=${diagnostics.visibilityState || 'unknown'}; slider-cards=${sliderHits}; title-cards=${titleCardHits}; watch-links=${diagnostics.watchLinkCount ?? 0}; aria-labels=${diagnostics.ariaLabelCount ?? 0}.`,
+        );
+      } else {
+        setImportMessage(`${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
+      }
+
       importNonceRef.current = null;
       setImportNonce(null);
     };

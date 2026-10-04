@@ -70,6 +70,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     type: 'scc:watchlist-import',
     nonce: message.nonce,
     items: message.items,
+    diagnostics: message.diagnostics || null,
   }).catch(() => {});
 });
 

@@ -25,6 +25,9 @@ function normalizeTitle(value) {
 function getNetflixItems() {
   const items = [];
   const seen = new Set();
+  const selectorCounts = Object.fromEntries(
+    TITLE_SELECTORS.map(selector => [selector, document.querySelectorAll(selector).length]),
+  );
 
   for (const selector of TITLE_SELECTORS) {
     document.querySelectorAll(selector).forEach(element => {
@@ -56,16 +59,23 @@ function getNetflixItems() {
     });
   }
 
-  return items;
+  return {
+    items,
+    selectorCounts,
+    watchLinkCount: document.querySelectorAll('a[href*="/watch/"]').length,
+    ariaLabelCount: document.querySelectorAll('[aria-label]').length,
+  };
 }
 
 async function waitForNetflixItems(timeoutMs = 12000) {
   const started = Date.now();
   let lastCount = 0;
   let stableChecks = 0;
+  let scan = getNetflixItems();
 
   while (Date.now() - started < timeoutMs) {
-    const items = getNetflixItems();
+    scan = getNetflixItems();
+    const items = scan.items;
     if (items.length > lastCount) {
       lastCount = items.length;
       stableChecks = 0;
@@ -73,13 +83,13 @@ async function waitForNetflixItems(timeoutMs = 12000) {
       stableChecks += 1;
     }
 
-    if (items.length > 0 && stableChecks >= 3) return items;
+    if (items.length > 0 && stableChecks >= 3) return scan;
 
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  return getNetflixItems();
+  return scan;
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -87,11 +97,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
 
   waitForNetflixItems()
-    .then(items => {
+    .then(scan => {
       chrome.runtime.sendMessage({
         type: 'provider-watchlist-items',
         nonce: message.nonce,
-        items,
+        items: scan.items,
+        diagnostics: {
+          url: window.location.href,
+          title: document.title,
+          readyState: document.readyState,
+          visibilityState: document.visibilityState,
+          selectorCounts: scan.selectorCounts,
+          watchLinkCount: scan.watchLinkCount,
+          ariaLabelCount: scan.ariaLabelCount,
+        },
       }).catch(() => {});
     })
     .catch(() => {});
