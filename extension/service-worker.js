@@ -91,10 +91,21 @@ async function sendToProviderTabs(nonce, sccTabId) {
     if (!tab.id || !tab.url) continue;
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
+      let scanTab;
       try {
-        await requestNetflixScan(tab.id, nonce);
+        scanTab = await chrome.tabs.create({
+          url: 'https://www.netflix.com/browse/my-list',
+          active: false,
+        });
+        const session = sessions.get(nonce);
+        if (session) session.providerTabId = scanTab.id || null;
+        if (!scanTab.id) throw new Error('Netflix My List tab could not be created.');
+        await requestNetflixScan(scanTab.id, nonce);
         scanCount += 1;
       } catch (error) {
+        if (scanTab?.id) {
+          try { await chrome.tabs.remove(scanTab.id); } catch {}
+        }
         scanErrors.push({
           tabId: tab.id,
           url: tab.url,
