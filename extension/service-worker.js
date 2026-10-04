@@ -98,13 +98,8 @@ async function scanNetflixTab(tabId) {
 }
 
 async function sendToProviderTabs(nonce, sccTabId) {
+  const providerTabs = await chrome.tabs.query({ url: PROVIDER_URLS });
   const allTabs = await chrome.tabs.query({});
-  const providerTabs = allTabs.filter(tab =>
-    typeof tab.url === 'string' && PROVIDER_URLS.some(pattern => {
-      const origin = pattern.replace('/*', '');
-      return tab.url.startsWith(origin);
-    })
-  );
 
   let scanCount = 0;
   let importedCount = 0;
