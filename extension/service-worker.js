@@ -35,6 +35,17 @@ const PROVIDER_URLS = [
   'https://www.crunchyroll.com/*'
 ];
 
+const PROVIDER_ADAPTERS = {
+  netflix: {
+    matches: url => url.startsWith('https://www.netflix.com/'),
+    scan: requestNetflixScan,
+  },
+};
+
+function getProviderAdapter(url) {
+  return Object.values(PROVIDER_ADAPTERS).find(adapter => adapter.matches(url)) || null;
+}
+
 async function findSccTab(preferredTabId) {
   if (preferredTabId) {
     try {
@@ -121,23 +132,24 @@ async function sendToProviderTabs(nonce, sccTabId) {
   for (const tab of providerTabs) {
     if (!tab.id || !tab.url) continue;
 
-    if (tab.url.startsWith('https://www.netflix.com/')) {
-      try {
-        const session = await getSession(nonce);
-        const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-        const restoreTabId = session?.restoreTabId || activeTabs[0]?.id || sccTabId;
-        await updateSession(nonce, { providerTabId: tab.id, restoreTabId });
-        await chrome.tabs.update(tab.id, { active: true });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await requestNetflixScan(tab.id, nonce);
-        scanCount += 1;
-      } catch (error) {
-        scanErrors.push({
-          tabId: tab.id,
-          url: tab.url,
-          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-        });
-      }
+    const adapter = getProviderAdapter(tab.url);
+    if (!adapter) continue;
+
+    try {
+      const session = await getSession(nonce);
+      const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const restoreTabId = session?.restoreTabId || activeTabs[0]?.id || sccTabId;
+      await updateSession(nonce, { providerTabId: tab.id, restoreTabId });
+      await chrome.tabs.update(tab.id, { active: true });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await adapter.scan(tab.id, nonce);
+      scanCount += 1;
+    } catch (error) {
+      scanErrors.push({
+        tabId: tab.id,
+        url: tab.url,
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
     }
   }
 
