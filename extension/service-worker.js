@@ -144,8 +144,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         startedAt: Date.now(),
       });
 
-      const result = await sendToProviderTabs(message.nonce, sccTab.id);
-      sendResponse({ ok: true, accepted: true, ...result });
+      sendResponse({ ok: true, accepted: true, allTabCount: 0, providerTabCount: 0, scanCount: 0, importedCount: 0, scanErrors: [], deliveryErrors: [] });
+      sendToProviderTabs(message.nonce, sccTab.id).catch(() => {});
     })
     .catch(() => sendResponse({ ok: false, reason: 'import-start-failed' }));
 
