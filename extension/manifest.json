@@ -28,6 +28,16 @@
       "run_at": "document_idle"
     },
     {
+      "matches": ["https://www.hulu.com/*"],
+      "js": ["provider-adapters.js", "hulu-reader.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.peacocktv.com/*"],
+      "js": ["provider-adapters.js", "peacock-reader.js"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["https://stream-command-center-three.vercel.app/*"],
       "js": ["scc-bridge.js"],
       "run_at": "document_idle"

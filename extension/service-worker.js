@@ -40,6 +40,14 @@ const PROVIDER_ADAPTERS = {
     matches: url => url.startsWith('https://www.netflix.com/'),
     scan: requestNetflixScan,
   },
+  hulu: {
+    matches: url => url.startsWith('https://www.hulu.com/'),
+    scan: requestHuluScan,
+  },
+  peacock: {
+    matches: url => url.startsWith('https://www.peacocktv.com/'),
+    scan: requestPeacockScan,
+  },
 };
 
 function getProviderAdapter(url) {
@@ -58,6 +66,39 @@ async function findSccTab(preferredTabId) {
   return tabs.find(tab => tab.active) || tabs[0] || null;
 }
 
+
+async function requestProviderReaderScan(tabId, nonce, providerName) {
+  const started = Date.now();
+  let lastError = null;
+  let reloaded = false;
+
+  while (Date.now() - started < 8000) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: 'scc:provider-scan', nonce });
+      if (!response?.ok || response.accepted !== true) {
+        throw new Error(response?.error || (providerName + ' reader did not acknowledge the scan.'));
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (!reloaded && String(error?.message || error).includes('Receiving end does not exist')) {
+        reloaded = true;
+        try { await chrome.tabs.reload(tabId); } catch {}
+      }
+      await new Promise(resolve => setTimeout(resolve, 750));
+    }
+  }
+
+  throw lastError || new Error(providerName + ' reader did not become available.');
+}
+
+async function requestHuluScan(tabId, nonce) {
+  return requestProviderReaderScan(tabId, nonce, 'Hulu');
+}
+
+async function requestPeacockScan(tabId, nonce) {
+  return requestProviderReaderScan(tabId, nonce, 'Peacock');
+}
 
 async function requestNetflixScan(tabId, nonce) {
   const started = Date.now();
