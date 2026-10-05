@@ -335,7 +335,16 @@ function App() {
         const profile = profileSnap.data();
         setTrialEndsAt(typeof profile.trialEndsAt === 'number' ? profile.trialEndsAt : null);
         if (Array.isArray(profile.connectedProviders)) setConnected(profile.connectedProviders);
-        if (Array.isArray(profile.watchlist)) setWatchlist(profile.watchlist);
+        if (Array.isArray(profile.watchlist)) {
+          setWatchlist(current => {
+            const merged = [...profile.watchlist] as SavedTitle[];
+            const ids = new Set(merged.map(item => item.id));
+            current.forEach(item => {
+              if (!ids.has(item.id)) merged.push(item);
+            });
+            return merged;
+          });
+        }
       } else {
         const trialStart = Date.now();
         const trialEnd = trialStart + 72 * 60 * 60 * 1000;
