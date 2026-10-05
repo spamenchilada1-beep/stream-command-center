@@ -48,7 +48,39 @@ const PROVIDER_ADAPTERS = {
     matches: url => url.startsWith('https://www.peacocktv.com/'),
     scan: requestPeacockScan,
   },
+  'prime-video': {
+    matches: url => url.startsWith('https://www.primevideo.com/'),
+    scan: nonceProviderScan('Prime Video'),
+  },
+  'disney-plus': {
+    matches: url => url.startsWith('https://www.disneyplus.com/'),
+    scan: nonceProviderScan('Disney+'),
+  },
+  max: {
+    matches: url => url.startsWith('https://www.max.com/'),
+    scan: nonceProviderScan('Max'),
+  },
+  'paramount-plus': {
+    matches: url => url.startsWith('https://www.paramountplus.com/'),
+    scan: nonceProviderScan('Paramount+'),
+  },
+  'apple-tv-plus': {
+    matches: url => url.startsWith('https://tv.apple.com/'),
+    scan: nonceProviderScan('Apple TV+'),
+  },
+  tubi: {
+    matches: url => url.startsWith('https://www.tubitv.com/'),
+    scan: nonceProviderScan('Tubi'),
+  },
+  crunchyroll: {
+    matches: url => url.startsWith('https://www.crunchyroll.com/'),
+    scan: nonceProviderScan('Crunchyroll'),
+  },
 };
+
+function nonceProviderScan(providerName) {
+  return (tabId, nonce) => requestProviderReaderScan(tabId, nonce, providerName);
+}
 
 function getProviderAdapter(url) {
   return Object.values(PROVIDER_ADAPTERS).find(adapter => adapter.matches(url)) || null;
