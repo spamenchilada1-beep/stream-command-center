@@ -103,10 +103,11 @@ async function waitForNetflixItems(timeoutMs = 12000) {
       if (seen.size === before && Date.now() - started > 3000) break;
     } else {
       await new Promise(resolve => setTimeout(resolve, 400));
-      if (seen.size === before) break;
+      const initialRenderGraceExpired = Date.now() - started > 6000;
+      if (seen.size === before && (seen.size > 0 || initialRenderGraceExpired)) break;
     }
 
-    if (section && !rightButton) break;
+    if (section && !rightButton && seen.size > 0) break;
   }
 
   const finalSection = section || findMyListSection();
