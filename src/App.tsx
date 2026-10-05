@@ -273,6 +273,7 @@ function App() {
   const [accountMessage, setAccountMessage] = useState('');
   const [accountForm, setAccountForm] = useState({ email: '', password: '' });
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
+  const [profileRestored, setProfileRestored] = useState(false);
   const [importNonce, setImportNonce] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const importNonceRef = useRef<string | null>(null);
@@ -328,7 +329,12 @@ function App() {
       }
       setAuthReady(true);
       setAccountMode(user.isAnonymous ? 'anonymous' : 'signed-in');
-      setAccountEmail(user.email || '');      if (user.isAnonymous) return;
+      setAccountEmail(user.email || '');
+      setProfileRestored(false);
+      if (user.isAnonymous) {
+        setProfileRestored(true);
+        return;
+      }
       const profileRef = doc(db, 'users', user.uid);
       const profileSnap = await getDoc(profileRef);
       if (profileSnap.exists()) {
@@ -345,6 +351,7 @@ function App() {
             return merged;
           });
         }
+        setProfileRestored(true);
       } else {
         const trialStart = Date.now();
         const trialEnd = trialStart + 72 * 60 * 60 * 1000;
@@ -360,20 +367,22 @@ function App() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        setProfileRestored(true);
       }
     });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    if (!authReady || !auth.currentUser || auth.currentUser.isAnonymous) return;    const profileRef = doc(db, 'users', auth.currentUser.uid);
+    if (!authReady || !profileRestored || !auth.currentUser || auth.currentUser.isAnonymous) return;
+    const profileRef = doc(db, 'users', auth.currentUser.uid);
     setDoc(profileRef, {
       email: auth.currentUser.email || accountEmail,
       connectedProviders: connected,
       watchlist,
       updatedAt: serverTimestamp(),
     }, { merge: true }).catch(() => undefined);
-  }, [connected, watchlist, authReady, accountEmail]);
+  }, [connected, watchlist, authReady, profileRestored, accountEmail]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
