@@ -32,7 +32,28 @@ const PROVIDER_URLS = [
   'https://www.peacocktv.com/*',
   'https://tv.apple.com/*',
   'https://www.tubitv.com/*',
-  'https://www.crunchyroll.com/*'
+  'https://tubitv.com/*',
+  'https://www.crunchyroll.com/*',
+  'https://www.mgmplus.com/*',
+  'https://www.starz.com/*',
+  'https://www.amcplus.com/*',
+  'https://www.discoveryplus.com/*',
+  'https://www.espn.com/*',
+  'https://www.fubo.tv/*',
+  'https://www.sling.com/*',
+  'https://tv.youtube.com/*',
+  'https://www.philo.com/*',
+  'https://www.britbox.com/*',
+  'https://acorn.tv/*',
+  'https://www.shudder.com/*',
+  'https://mubi.com/*',
+  'https://www.hallmarkplus.com/*',
+  'https://www.criterionchannel.com/*',
+  'https://www.dropout.tv/*',
+  'https://www.hidive.com/*',
+  'https://pluto.tv/*',
+  'https://www.roku.com/*',
+  'https://www.plex.tv/*'
 ];
 
 const PROVIDER_ADAPTERS = {
@@ -69,12 +90,92 @@ const PROVIDER_ADAPTERS = {
     scan: nonceProviderScan('Apple TV+'),
   },
   tubi: {
-    matches: url => url.startsWith('https://www.tubitv.com/'),
+    matches: url => url.startsWith('https://www.tubitv.com/') || url.startsWith('https://tubitv.com/'),
     scan: nonceProviderScan('Tubi'),
   },
   crunchyroll: {
     matches: url => url.startsWith('https://www.crunchyroll.com/'),
     scan: nonceProviderScan('Crunchyroll'),
+  },
+  'mgm-plus': {
+    matches: url => url.startsWith('https://www.mgmplus.com/'),
+    scan: nonceProviderScan('MGM+'),
+  },
+  starz: {
+    matches: url => url.startsWith('https://www.starz.com/'),
+    scan: nonceProviderScan('STARZ'),
+  },
+  'amc-plus': {
+    matches: url => url.startsWith('https://www.amcplus.com/'),
+    scan: nonceProviderScan('AMC+'),
+  },
+  'discovery-plus': {
+    matches: url => url.startsWith('https://www.discoveryplus.com/'),
+    scan: nonceProviderScan('discovery+'),
+  },
+  espn: {
+    matches: url => url.startsWith('https://www.espn.com/'),
+    scan: nonceProviderScan('ESPN'),
+  },
+  fubo: {
+    matches: url => url.startsWith('https://www.fubo.tv/'),
+    scan: nonceProviderScan('Fubo'),
+  },
+  sling: {
+    matches: url => url.startsWith('https://www.sling.com/'),
+    scan: nonceProviderScan('Sling'),
+  },
+  'youtube-tv': {
+    matches: url => url.startsWith('https://tv.youtube.com/'),
+    scan: nonceProviderScan('YouTube TV'),
+  },
+  philo: {
+    matches: url => url.startsWith('https://www.philo.com/'),
+    scan: nonceProviderScan('Philo'),
+  },
+  britbox: {
+    matches: url => url.startsWith('https://www.britbox.com/'),
+    scan: nonceProviderScan('BritBox'),
+  },
+  'acorn-tv': {
+    matches: url => url.startsWith('https://acorn.tv/'),
+    scan: nonceProviderScan('Acorn TV'),
+  },
+  shudder: {
+    matches: url => url.startsWith('https://www.shudder.com/'),
+    scan: nonceProviderScan('Shudder'),
+  },
+  mubi: {
+    matches: url => url.startsWith('https://mubi.com/'),
+    scan: nonceProviderScan('MUBI'),
+  },
+  hallmark: {
+    matches: url => url.startsWith('https://www.hallmarkplus.com/'),
+    scan: nonceProviderScan('Hallmark+'),
+  },
+  criterion: {
+    matches: url => url.startsWith('https://www.criterionchannel.com/'),
+    scan: nonceProviderScan('Criterion Channel'),
+  },
+  dropout: {
+    matches: url => url.startsWith('https://www.dropout.tv/'),
+    scan: nonceProviderScan('Dropout'),
+  },
+  hidive: {
+    matches: url => url.startsWith('https://www.hidive.com/'),
+    scan: nonceProviderScan('HIDIVE'),
+  },
+  'pluto-tv': {
+    matches: url => url.startsWith('https://pluto.tv/'),
+    scan: nonceProviderScan('Pluto TV'),
+  },
+  'roku-channel': {
+    matches: url => url.startsWith('https://www.roku.com/'),
+    scan: nonceProviderScan('The Roku Channel'),
+  },
+  plex: {
+    matches: url => url.startsWith('https://www.plex.tv/'),
+    scan: nonceProviderScan('Plex'),
   },
 };
 

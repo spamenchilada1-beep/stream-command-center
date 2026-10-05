@@ -1,11 +1,31 @@
 const SAVED_LIBRARY_PROVIDERS = {
-  'www.primevideo.com': { provider: 'Prime Video', patterns: [/\bmy stuff\b/i, /\bwatchlist\b/i, /\bmy watchlist\b/i] },
+  'www.primevideo.com': { provider: 'Prime Video', patterns: [/\bmy stuff\b/i, /\bwatchlist\b/i, /\bmy watchlist\b/i, /\bsaved\b/i] },
   'www.disneyplus.com': { provider: 'Disney+', patterns: [/\bwatchlist\b/i, /\bmy list\b/i, /\bsaved\b/i] },
-  'www.max.com': { provider: 'Max', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i] },
-  'www.paramountplus.com': { provider: 'Paramount+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i] },
+  'www.max.com': { provider: 'Max', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i] },
+  'www.paramountplus.com': { provider: 'Paramount+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
   'tv.apple.com': { provider: 'Apple TV+', patterns: [/\bup next\b/i, /\bwatchlist\b/i, /\bmy list\b/i, /\bsaved\b/i] },
-  'www.tubitv.com': { provider: 'Tubi', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i] },
-  'www.crunchyroll.com': { provider: 'Crunchyroll', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
+  'www.tubitv.com': { provider: 'Tubi', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
+  'www.crunchyroll.com': { provider: 'Crunchyroll', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.mgmplus.com': { provider: 'MGM+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
+  'www.starz.com': { provider: 'STARZ', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.amcplus.com': { provider: 'AMC+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.discoveryplus.com': { provider: 'discovery+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.espn.com': { provider: 'ESPN', patterns: [/\bmy list\b/i, /\bsaved\b/i, /\bfavorites?\b/i, /\bwatchlist\b/i] },
+  'www.fubo.tv': { provider: 'Fubo', patterns: [/\bmy stuff\b/i, /\bfavorites?\b/i, /\bsaved\b/i, /\bwatchlist\b/i] },
+  'www.sling.com': { provider: 'Sling', patterns: [/\bfavorites?\b/i, /\bsaved\b/i, /\bwatchlist\b/i, /\bmy list\b/i] },
+  'tv.youtube.com': { provider: 'YouTube TV', patterns: [/\blibrary\b/i, /\bsaved\b/i, /\bfavorites?\b/i, /\bwatchlist\b/i] },
+  'www.philo.com': { provider: 'Philo', patterns: [/\bsaved\b/i, /\bfavorites?\b/i, /\bmy stuff\b/i, /\bwatchlist\b/i] },
+  'www.britbox.com': { provider: 'BritBox', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
+  'acorn.tv': { provider: 'Acorn TV', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
+  'www.shudder.com': { provider: 'Shudder', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
+  'mubi.com': { provider: 'MUBI', patterns: [/\bwatchlist\b/i, /\bmy list\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.hallmarkplus.com': { provider: 'Hallmark+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
+  'www.criterionchannel.com': { provider: 'Criterion Channel', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.dropout.tv': { provider: 'Dropout', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'www.hidive.com': { provider: 'HIDIVE', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
+  'pluto.tv': { provider: 'Pluto TV', patterns: [/\bfavorites?\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bwatchlist\b/i] },
+  'www.roku.com': { provider: 'The Roku Channel', patterns: [/\bmy list\b/i, /\bsaved\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i] },
+  'www.plex.tv': { provider: 'Plex', patterns: [/\bwatchlist\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bfavorites?\b/i] },
 };
 
 const CARD_SELECTORS = [
@@ -48,7 +68,11 @@ function findSavedRoot(config) {
     if (root) return root;
   }
 
-  return document.querySelector('main') || document.body;
+  if (/(?:^|\\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later)(?:$|\\/)/i.test(location.pathname)) {
+    return document.querySelector('main') || document.body;
+  }
+
+  return null;
 }
 
 function extractItems(root, provider) {
@@ -121,6 +145,8 @@ async function scanSavedLibrary(config) {
 
   while (Date.now() - started < 12000) {
     root = root?.isConnected ? root : findSavedRoot(config);
+
+    if (!root) break;
 
     for (const item of extractItems(root, config.provider)) {
       if (!seen.has(item.id)) seen.set(item.id, item);

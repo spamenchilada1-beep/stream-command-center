@@ -18,7 +18,28 @@
     "https://www.peacocktv.com/*",
     "https://tv.apple.com/*",
     "https://www.tubitv.com/*",
+    "https://tubitv.com/*",
     "https://www.crunchyroll.com/*",
+    "https://www.mgmplus.com/*",
+    "https://www.starz.com/*",
+    "https://www.amcplus.com/*",
+    "https://www.discoveryplus.com/*",
+    "https://www.espn.com/*",
+    "https://www.fubo.tv/*",
+    "https://www.sling.com/*",
+    "https://tv.youtube.com/*",
+    "https://www.philo.com/*",
+    "https://www.britbox.com/*",
+    "https://acorn.tv/*",
+    "https://www.shudder.com/*",
+    "https://mubi.com/*",
+    "https://www.hallmarkplus.com/*",
+    "https://www.criterionchannel.com/*",
+    "https://www.dropout.tv/*",
+    "https://www.hidive.com/*",
+    "https://pluto.tv/*",
+    "https://www.roku.com/*",
+    "https://www.plex.tv/*",
     "https://stream-command-center-three.vercel.app/*"
   ],
   "background": {
@@ -57,67 +78,34 @@
     },
     {
       "matches": [
-        "https://www.primevideo.com/*"
-      ],
-      "js": [
-        "provider-adapters.js",
-        "saved-library-reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://www.disneyplus.com/*"
-      ],
-      "js": [
-        "provider-adapters.js",
-        "saved-library-reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://www.max.com/*"
-      ],
-      "js": [
-        "provider-adapters.js",
-        "saved-library-reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://www.paramountplus.com/*"
-      ],
-      "js": [
-        "provider-adapters.js",
-        "saved-library-reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://tv.apple.com/*"
-      ],
-      "js": [
-        "provider-adapters.js",
-        "saved-library-reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://www.tubitv.com/*"
-      ],
-      "js": [
-        "provider-adapters.js",
-        "saved-library-reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://www.crunchyroll.com/*"
+        "https://www.primevideo.com/*",
+        "https://www.disneyplus.com/*",
+        "https://www.max.com/*",
+        "https://www.paramountplus.com/*",
+        "https://tv.apple.com/*",
+        "https://www.tubitv.com/*",
+        "https://tubitv.com/*",
+        "https://www.crunchyroll.com/*",
+        "https://www.mgmplus.com/*",
+        "https://www.starz.com/*",
+        "https://www.amcplus.com/*",
+        "https://www.discoveryplus.com/*",
+        "https://www.espn.com/*",
+        "https://www.fubo.tv/*",
+        "https://www.sling.com/*",
+        "https://tv.youtube.com/*",
+        "https://www.philo.com/*",
+        "https://www.britbox.com/*",
+        "https://acorn.tv/*",
+        "https://www.shudder.com/*",
+        "https://mubi.com/*",
+        "https://www.hallmarkplus.com/*",
+        "https://www.criterionchannel.com/*",
+        "https://www.dropout.tv/*",
+        "https://www.hidive.com/*",
+        "https://pluto.tv/*",
+        "https://www.roku.com/*",
+        "https://www.plex.tv/*"
       ],
       "js": [
         "provider-adapters.js",
