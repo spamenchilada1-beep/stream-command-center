@@ -1,5 +1,26 @@
 const SCC_ORIGIN = 'https://stream-command-center-three.vercel.app';
-const sessions = new Map();
+const SESSION_PREFIX = 'import-session:';
+
+async function setSession(nonce, session) {
+  await chrome.storage.session.set({ [SESSION_PREFIX + nonce]: session });
+}
+
+async function getSession(nonce) {
+  const result = await chrome.storage.session.get(SESSION_PREFIX + nonce);
+  return result[SESSION_PREFIX + nonce] || null;
+}
+
+async function updateSession(nonce, patch) {
+  const session = await getSession(nonce);
+  if (!session) return null;
+  const next = { ...session, ...patch };
+  await setSession(nonce, next);
+  return next;
+}
+
+async function deleteSession(nonce) {
+  await chrome.storage.session.remove(SESSION_PREFIX + nonce);
+}
 
 const PROVIDER_URLS = [
   'https://www.netflix.com/*',
@@ -62,15 +83,16 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
   if (!Array.isArray(message.items)) return;
 
-  const session = sessions.get(message.nonce);
-  if (!session || !sender.tab?.id || sender.tab.id !== session.providerTabId) return;
+  getSession(message.nonce).then(session => {
+    if (!session || !sender.tab?.id || sender.tab.id !== session.providerTabId) return;
 
-  chrome.tabs.sendMessage(session.sccTabId, {
-    source: 'stream-command-extension',
-    type: 'scc:watchlist-import',
-    nonce: message.nonce,
-    items: message.items,
-    diagnostics: message.diagnostics || null,
+    chrome.tabs.sendMessage(session.sccTabId, {
+      source: 'stream-command-extension',
+      type: 'scc:watchlist-import',
+      nonce: message.nonce,
+      items: message.items,
+      diagnostics: message.diagnostics || null,
+    }).then(() => deleteSession(message.nonce)).catch(() => {});
   }).catch(() => {});
 });
 
@@ -93,8 +115,7 @@ async function sendToProviderTabs(nonce, sccTabId) {
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
       try {
-        const session = sessions.get(nonce);
-        if (session) session.providerTabId = tab.id;
+        await updateSession(nonce, { providerTabId: tab.id });
         await requestNetflixScan(tab.id, nonce);
         scanCount += 1;
       } catch (error) {
@@ -138,7 +159,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       }
 
       const providerTab = await chrome.tabs.query({ url: PROVIDER_URLS });
-      sessions.set(message.nonce, {
+      await setSession(message.nonce, {
         sccTabId: sccTab.id,
         providerTabId: providerTab.find(tab => typeof tab.url === 'string' && tab.url.startsWith('https://www.netflix.com/'))?.id || null,
         startedAt: Date.now(),
@@ -152,8 +173,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   return true;
 });
 
-chrome.tabs.onRemoved.addListener(tabId => {
-  for (const [nonce, session] of sessions.entries()) {
-    if (session.sccTabId === tabId) sessions.delete(nonce);
-  }
+chrome.tabs.onRemoved.addListener(async tabId => {
+  const stored = await chrome.storage.session.get(null);
+  const removals = Object.entries(stored)
+    .filter(([key, session]) => key.startsWith(SESSION_PREFIX) && session?.sccTabId === tabId)
+    .map(([key]) => key);
+  if (removals.length) await chrome.storage.session.remove(removals);
 });
