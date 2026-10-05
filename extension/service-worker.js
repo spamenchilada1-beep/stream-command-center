@@ -86,13 +86,21 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   getSession(message.nonce).then(session => {
     if (!session || !sender.tab?.id || sender.tab.id !== session.providerTabId) return;
 
+    const restoreTabId = session.restoreTabId;
     chrome.tabs.sendMessage(session.sccTabId, {
       source: 'stream-command-extension',
       type: 'scc:watchlist-import',
       nonce: message.nonce,
       items: message.items,
       diagnostics: message.diagnostics || null,
-    }).then(() => deleteSession(message.nonce)).catch(() => {});
+    }).catch(() => {}).finally(async () => {
+      await deleteSession(message.nonce).catch(() => {});
+      if (restoreTabId) {
+        try {
+          await chrome.tabs.update(restoreTabId, { active: true });
+        } catch {}
+      }
+    });
   }).catch(() => {});
 });
 
@@ -115,7 +123,12 @@ async function sendToProviderTabs(nonce, sccTabId) {
 
     if (tab.url.startsWith('https://www.netflix.com/')) {
       try {
-        await updateSession(nonce, { providerTabId: tab.id });
+        const session = await getSession(nonce);
+        const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        const restoreTabId = session?.restoreTabId || activeTabs[0]?.id || sccTabId;
+        await updateSession(nonce, { providerTabId: tab.id, restoreTabId });
+        await chrome.tabs.update(tab.id, { active: true });
+        await new Promise(resolve => setTimeout(resolve, 1000));
         await requestNetflixScan(tab.id, nonce);
         scanCount += 1;
       } catch (error) {
