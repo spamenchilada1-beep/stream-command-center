@@ -314,8 +314,8 @@ function App() {
         setImportMessage(`${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
       }
 
-      importNonceRef.current = null;
-      setImportNonce(null);
+      // Keep the import nonce active so results from every open provider are accepted.
+      // The import is ended by the session timeout or a new import request.
     };
 
     window.addEventListener('message', handleImportMessage);
