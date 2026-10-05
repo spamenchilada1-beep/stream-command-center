@@ -130,19 +130,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   waitForNetflixItems()
     .then(scan => {
-      chrome.runtime.sendMessage({
-        type: 'provider-watchlist-items',
-        nonce: message.nonce,
-        items: scan.items,
-        diagnostics: {
-          url: window.location.href,
-          title: document.title,
-          readyState: document.readyState,
-          visibilityState: document.visibilityState,
-          selectorCounts: scan.selectorCounts,
-          watchLinkCount: scan.watchLinkCount,
-          ariaLabelCount: scan.ariaLabelCount,
-        },
+      sendProviderItems(message.nonce, scan.items, {
+        providerId: 'netflix',
+        url: window.location.href,
+        title: document.title,
+        readyState: document.readyState,
+        visibilityState: document.visibilityState,
+        selectorCounts: scan.selectorCounts,
+        watchLinkCount: scan.watchLinkCount,
+        ariaLabelCount: scan.ariaLabelCount,
       }).catch(() => {});
     })
     .catch(() => {});
