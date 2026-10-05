@@ -220,6 +220,7 @@ const starterTitles: SavedTitle[] = [
 
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
 const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
+const IMPORT_SESSION_TIMEOUT_MS = 90 * 1000;
 const SCC_IMPORT_EXTENSION_ID = 'fhcjfhfhdcnknkikepklmgpmcenallmm';
 
 type ChromeRuntimeBridge = {

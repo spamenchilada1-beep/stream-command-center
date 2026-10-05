@@ -268,24 +268,37 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
   if (!Array.isArray(message.items)) return;
 
-  getSession(message.nonce).then(session => {
-    if (!session || !sender.tab?.id || sender.tab.id !== session.providerTabId) return;
+  getSession(message.nonce).then(async session => {
+    const senderTabId = sender.tab?.id;
+    const providerTabIds = Array.isArray(session?.providerTabIds) ? session.providerTabIds : [];
+    if (!session || !senderTabId || !providerTabIds.includes(senderTabId)) return;
 
-    const restoreTabId = session.restoreTabId;
-    chrome.tabs.sendMessage(session.sccTabId, {
-      source: 'stream-command-extension',
-      type: 'scc:watchlist-import',
-      nonce: message.nonce,
-      items: message.items,
-      diagnostics: message.diagnostics || null,
-    }).catch(() => {}).finally(async () => {
-      await deleteSession(message.nonce).catch(() => {});
-      if (restoreTabId) {
-        try {
-          await chrome.tabs.update(restoreTabId, { active: true });
-        } catch {}
+    try {
+      await chrome.tabs.sendMessage(session.sccTabId, {
+        source: 'stream-command-extension',
+        type: 'scc:watchlist-import',
+        nonce: message.nonce,
+        items: message.items,
+        diagnostics: message.diagnostics || null,
+      });
+
+      const completedProviderTabIds = Array.from(
+        new Set([...(session.completedProviderTabIds || []), senderTabId]),
+      );
+      const allProvidersComplete =
+        providerTabIds.length > 0 && completedProviderTabIds.length >= providerTabIds.length;
+
+      if (allProvidersComplete) {
+        await deleteSession(message.nonce).catch(() => {});
+        if (session.restoreTabId) {
+          try {
+            await chrome.tabs.update(session.restoreTabId, { active: true });
+          } catch {}
+        }
+      } else {
+        await updateSession(message.nonce, { completedProviderTabIds });
       }
-    });
+    } catch {}
   }).catch(() => {});
 });
 
@@ -297,23 +310,28 @@ async function sendToProviderTabs(nonce, sccTabId) {
   let importedCount = 0;
   const scanErrors = [];
   const deliveryErrors = [];
-  const visibleProviderTabs = providerTabs.map(tab => ({
+  const eligibleProviderTabs = providerTabs.filter(tab => tab.id && tab.url && getProviderAdapter(tab.url));
+  const providerTabIds = eligibleProviderTabs.map(tab => tab.id);
+  const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const session = await getSession(nonce);
+  const restoreTabId = session?.restoreTabId || activeTabs[0]?.id || sccTabId;
+  await updateSession(nonce, {
+    providerTabIds,
+    completedProviderTabIds: [],
+    restoreTabId,
+  });
+
+  const visibleProviderTabs = eligibleProviderTabs.map(tab => ({
     id: tab.id,
     url: tab.url,
     title: tab.title || '',
   }));
 
-  for (const tab of providerTabs) {
-    if (!tab.id || !tab.url) continue;
-
+  for (const tab of eligibleProviderTabs) {
     const adapter = getProviderAdapter(tab.url);
-    if (!adapter) continue;
 
     try {
-      const session = await getSession(nonce);
-      const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      const restoreTabId = session?.restoreTabId || activeTabs[0]?.id || sccTabId;
-      await updateSession(nonce, { providerTabId: tab.id, restoreTabId });
+      await updateSession(nonce, { providerTabId: tab.id });
       await chrome.tabs.update(tab.id, { active: true });
       await new Promise(resolve => setTimeout(resolve, 1000));
       await adapter.scan(tab.id, nonce);

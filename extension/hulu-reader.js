@@ -1,4 +1,4 @@
-const HULU_MY_STUFF_PATTERNS = [/\\bmy stuff\\b/i, /\\bfavorites?\\b/i, /\\bwatchlist\\b/i];
+const HULU_MY_STUFF_PATTERNS = [/\bmy stuff\b/i, /\bfavorites?\b/i, /\bwatchlist\b/i];
 const HULU_CARD_SELECTORS = [
   'a[href][aria-label]',
   'a[href][title]',
@@ -9,7 +9,7 @@ const HULU_CARD_SELECTORS = [
 ];
 
 function cleanTitle(value) {
-  return (value || '').replace(/\\s+/g, ' ').trim();
+  return (value || '').replace(/\s+/g, ' ').trim();
 }
 
 function normalizeTitle(value) {
