@@ -40,10 +40,6 @@ const PROVIDER_ADAPTERS = {
     matches: url => url.startsWith('https://www.netflix.com/'),
     scan: requestNetflixScan,
   },
-  hulu: {
-    matches: url => url.startsWith('https://www.hulu.com/'),
-    scan: requestHuluScan,
-  },
 };
 
 function getProviderAdapter(url) {
@@ -91,36 +87,6 @@ async function requestNetflixScan(tabId, nonce) {
   }
 
   throw lastError || new Error('Netflix reader did not become available.');
-}
-
-async function requestHuluScan(tabId, nonce) {
-  const started = Date.now();
-  let lastError = null;
-  let reloaded = false;
-
-  while (Date.now() - started < 8000) {
-    try {
-      const response = await chrome.tabs.sendMessage(tabId, {
-        type: 'scc:provider-scan',
-        nonce,
-      });
-      if (!response?.ok || response.accepted !== true) {
-        throw new Error(response?.error || 'Hulu reader did not acknowledge the scan.');
-      }
-      return response;
-    } catch (error) {
-      lastError = error;
-      if (!reloaded && String(error?.message || error).includes('Receiving end does not exist')) {
-        reloaded = true;
-        try {
-          await chrome.tabs.reload(tabId);
-        } catch {}
-      }
-      await new Promise(resolve => setTimeout(resolve, 750));
-    }
-  }
-
-  throw lastError || new Error('Hulu reader did not become available.');
 }
 
 chrome.runtime.onMessage.addListener((message, sender) => {
