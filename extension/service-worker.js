@@ -183,8 +183,38 @@ function nonceProviderScan(providerName) {
   return (tabId, nonce) => requestProviderReaderScan(tabId, nonce, providerName);
 }
 
+function getProviderAdapterEntry(url) {
+  return Object.entries(PROVIDER_ADAPTERS).find(([, adapter]) => adapter.matches(url)) || null;
+}
+
 function getProviderAdapter(url) {
-  return Object.values(PROVIDER_ADAPTERS).find(adapter => adapter.matches(url)) || null;
+  return getProviderAdapterEntry(url)?.[1] || null;
+}
+
+const AUTH_PATH_PATTERN = /(?:^|\/)(?:login|signin|sign-in|signup|sign-up|register)(?:\/|$)/i;
+const SAVED_PATH_PATTERN = /(?:^|\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later)(?:\/|$)/i;
+const HISTORY_PATH_PATTERN = /(?:^|\/)account\/history(?:\/|$)/i;
+
+function getProviderTabPriority(url, providerId) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname;
+
+    if (AUTH_PATH_PATTERN.test(path)) return -1000;
+
+    if (providerId === 'netflix') {
+      if (/^\/browse\/my-list(?:\/|$)/i.test(path)) return 1000;
+      if (/^\/browse(?:\/|$)/i.test(path)) return 900;
+    }
+
+    if (providerId === 'tubi' && HISTORY_PATH_PATTERN.test(path)) return 1000;
+    if (SAVED_PATH_PATTERN.test(path) || HISTORY_PATH_PATTERN.test(path)) return 500;
+    if (/^\/(?:browse|home|watch|movies|shows)(?:\/|$)/i.test(path)) return 100;
+
+    return 10;
+  } catch {
+    return -1000;
+  }
 }
 
 async function findSccTab(preferredTabId) {
@@ -310,7 +340,34 @@ async function sendToProviderTabs(nonce, sccTabId) {
   let importedCount = 0;
   const scanErrors = [];
   const deliveryErrors = [];
-  const eligibleProviderTabs = providerTabs.filter(tab => tab.id && tab.url && getProviderAdapter(tab.url));
+  const providerCandidates = providerTabs
+    .map(tab => {
+      if (!tab.id || !tab.url) return null;
+      const entry = getProviderAdapterEntry(tab.url);
+      if (!entry) return null;
+      const [providerId, adapter] = entry;
+      return {
+        tab,
+        adapter,
+        providerId,
+        priority: getProviderTabPriority(tab.url, providerId),
+      };
+    })
+    .filter(candidate => candidate && candidate.priority >= 0);
+
+  const bestByProvider = new Map();
+  for (const candidate of providerCandidates) {
+    const existing = bestByProvider.get(candidate.providerId);
+    if (
+      !existing ||
+      candidate.priority > existing.priority ||
+      (candidate.priority === existing.priority && candidate.tab.active && !existing.tab.active)
+    ) {
+      bestByProvider.set(candidate.providerId, candidate);
+    }
+  }
+
+  const eligibleProviderTabs = [...bestByProvider.values()].map(candidate => candidate.tab);
   const providerTabIds = eligibleProviderTabs.map(tab => tab.id);
   const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   const session = await getSession(nonce);
@@ -321,10 +378,12 @@ async function sendToProviderTabs(nonce, sccTabId) {
     restoreTabId,
   });
 
-  const visibleProviderTabs = eligibleProviderTabs.map(tab => ({
-    id: tab.id,
-    url: tab.url,
-    title: tab.title || '',
+  const visibleProviderTabs = [...bestByProvider.values()].map(candidate => ({
+    id: candidate.tab.id,
+    providerId: candidate.providerId,
+    priority: candidate.priority,
+    url: candidate.tab.url,
+    title: candidate.tab.title || '',
   }));
 
   for (const tab of eligibleProviderTabs) {
