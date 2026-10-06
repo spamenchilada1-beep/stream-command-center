@@ -85,6 +85,18 @@ async function clickSavedControl(config) {
     if (await clickMatching([/^account\s*settings$/i])) {
       if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
     }
+    const profile = getControls().find(node => {
+      const label = getLabel(node);
+      return /profile\s*options|^profile$|^account$/i.test(label) || /\bperson\s*\d+\b/i.test(label);
+    });
+    if (profile) {
+      profile.click();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (await clickMatching([/^account\s*settings$/i])) {
+        if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
+      }
+      if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
+    }
     return false;
   }
 
