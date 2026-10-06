@@ -53,6 +53,49 @@ function normalizeTitle(value) {
   return title;
 }
 
+function isVisible(element) {
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden' && element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0;
+}
+
+async function clickSavedControl(config) {
+  const controls = [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')].filter(isVisible);
+  const providerPatterns = config.provider === 'Pluto TV'
+    ? [/^watch\s*list$/i, /^watchlist$/i, /^my\s*list$/i, /^saved$/i]
+    : config.provider === 'Tubi'
+      ? [/^history\s*&\s*my\s*list$/i, /^my\s*list$/i, /^watchlist$/i, /^saved$/i]
+      : [];
+
+  for (const pattern of providerPatterns) {
+    const control = controls.find(node => pattern.test(cleanText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '')));
+    if (control) {
+      control.click();
+      await new Promise(resolve => setTimeout(resolve, 900));
+      return true;
+    }
+  }
+
+  if (config.provider === 'Pluto TV' || config.provider === 'Tubi') {
+    const profileControl = controls.find(node => /profile|account/i.test(cleanText(node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent || '')));
+    if (profileControl) {
+      profileControl.click();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      for (const pattern of providerPatterns) {
+        const savedControl = [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')]
+          .filter(isVisible)
+          .find(node => pattern.test(cleanText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '')));
+        if (savedControl) {
+          savedControl.click();
+          await new Promise(resolve => setTimeout(resolve, 900));
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 function findSavedRoot(config) {
   const candidates = [...document.querySelectorAll('main section, main [role="region"], section, [role="region"]')];
   const priorityPatterns = config.provider === 'Pluto TV'
@@ -69,20 +112,22 @@ function findSavedRoot(config) {
     if (priorityPatterns.some(pattern => pattern.test(heading))) return candidate;
   }
 
-  for (const candidate of candidates) {
-    const heading = cleanText(
-      candidate.querySelector('h1, h2, h3, [role="heading"]')?.textContent || '',
-    );
+  if (config.provider !== 'Tubi' && config.provider !== 'Pluto TV') {
+    for (const candidate of candidates) {
+      const heading = cleanText(
+        candidate.querySelector('h1, h2, h3, [role="heading"]')?.textContent || '',
+      );
 
-    if (config.patterns.some(pattern => pattern.test(heading))) return candidate;
-  }
+      if (config.patterns.some(pattern => pattern.test(heading))) return candidate;
+    }
 
-  const matchedNodes = [...document.querySelectorAll('h1, h2, h3, [role="heading"], nav a, nav button')]
-    .filter(node => config.patterns.some(pattern => pattern.test(cleanText(node.textContent || ''))));
+    const matchedNodes = [...document.querySelectorAll('h1, h2, h3, [role="heading"], nav a, nav button')]
+      .filter(node => config.patterns.some(pattern => pattern.test(cleanText(node.textContent || ''))));
 
-  for (const node of matchedNodes) {
-    const root = node.closest('section, [role="region"], main') || node.parentElement;
-    if (root) return root;
+    for (const node of matchedNodes) {
+      const root = node.closest('section, [role="region"], main') || node.parentElement;
+      if (root) return root;
+    }
   }
 
   const savedPathSegments = new Set([
@@ -169,6 +214,12 @@ async function scanSavedLibrary(config) {
   const started = Date.now();
   const seen = new Map();
   let root = findSavedRoot(config);
+  let navigationAttempted = false;
+
+  if (!root && (config.provider === 'Tubi' || config.provider === 'Pluto TV')) {
+    navigationAttempted = await clickSavedControl(config);
+    root = findSavedRoot(config);
+  }
 
   while (Date.now() - started < 12000) {
     root = root?.isConnected ? root : findSavedRoot(config);
@@ -191,7 +242,8 @@ async function scanSavedLibrary(config) {
     items: [...seen.values()],
     selectorCounts: {
       savedRoot: root ? 1 : 0,
-      cardCandidates: root.querySelectorAll(CARD_SELECTORS.join(',')).length,
+      cardCandidates: root ? root.querySelectorAll(CARD_SELECTORS.join(',')).length : 0,
+      navigationAttempted,
     },
     watchLinkCount: document.querySelectorAll('a[href*="/watch/"], a[href*="/title/"], a[href*="/video/"]').length,
     ariaLabelCount: document.querySelectorAll('[aria-label]').length,

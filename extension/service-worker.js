@@ -197,7 +197,6 @@ const HISTORY_PATH_PATTERN = /(?:^|\/)account\/history(?:\/|$)/i;
 const PROVIDER_SCAN_TARGETS = {
   netflix: 'https://www.netflix.com/browse/my-list',
   tubi: 'https://tubitv.com/account/history',
-  'pluto-tv': 'https://pluto.tv/us/home/',
 };
 
 function getProviderTabPriority(url, providerId) {
