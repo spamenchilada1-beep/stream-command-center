@@ -431,9 +431,6 @@ async function sendToProviderTabs(nonce, sccTabId) {
 
     try {
       await updateSession(nonce, { providerTabId: tab.id });
-      if (!candidate.temporary) {
-        await chrome.tabs.update(tab.id, { active: true });
-      }
       await new Promise(resolve => setTimeout(resolve, 1000));
       await adapter.scan(tab.id, nonce);
       scanCount += 1;
