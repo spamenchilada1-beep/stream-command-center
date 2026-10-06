@@ -783,24 +783,14 @@ function App() {
               const nonce = createImportNonce();
               importNonceRef.current = nonce;
               setImportNonce(nonce);
-              const runtime = getChromeRuntimeBridge();
-              if (!runtime) {
-                setImportMessage('Chrome extension not detected. Install the Stream Command Watchlist Importer extension.');
-                return;
-              }
-              try {
-                const result = await runtime.sendMessage(SCC_IMPORT_EXTENSION_ID, {
+              window.postMessage(
+                {
+                  source: 'stream-command-center',
                   type: 'scc:import-start',
                   nonce,
-                });
-                if (!result?.ok) {
-                  setImportMessage(`Importer could not start: ${result?.reason || 'extension unavailable'}.`);
-                  return;
-                }
-                // The extension acknowledges immediately; the provider scan result returns asynchronously through the bridge.
-              } catch {
-                setImportMessage('Importer connection failed. The extension is not available to this browser page.');
-              }
+                },
+                window.location.origin,
+              );
             }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import watchlists</button></div>{importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
           </section>}
         </main>
