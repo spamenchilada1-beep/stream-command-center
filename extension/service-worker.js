@@ -192,7 +192,7 @@ function getProviderAdapter(url) {
 }
 
 const AUTH_PATH_PATTERN = /(?:^|\/)(?:login|signin|sign-in|signup|sign-up|register)(?:\/|$)/i;
-const SAVED_PATH_PATTERN = /(?:^|\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later)(?:\/|$)/i;
+const SAVED_PATH_PATTERN = /(?:^|\/)(?:my-stuff|my-list|watchlist|watch-list|favorites?|saved|library|up-next|watch-later)(?:\/|$)/i;
 const HISTORY_PATH_PATTERN = /(?:^|\/)account\/history(?:\/|$)/i;
 const PROVIDER_SCAN_TARGETS = {
   netflix: 'https://www.netflix.com/browse/my-list',

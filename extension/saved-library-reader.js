@@ -24,7 +24,7 @@ const SAVED_LIBRARY_PROVIDERS = {
   'www.criterionchannel.com': { provider: 'Criterion Channel', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
   'www.dropout.tv': { provider: 'Dropout', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
   'www.hidive.com': { provider: 'HIDIVE', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
-  'pluto.tv': { provider: 'Pluto TV', patterns: [/\bfavorites?\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bwatchlist\b/i] },
+  'pluto.tv': { provider: 'Pluto TV', patterns: [/\bfavorites?\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bwatch\s+list\b/i, /\bwatchlist\b/i] },
   'www.roku.com': { provider: 'The Roku Channel', patterns: [/\bmy list\b/i, /\bsaved\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i] },
   'www.plex.tv': { provider: 'Plex', patterns: [/\bwatchlist\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bfavorites?\b/i] },
 };
@@ -38,7 +38,7 @@ const CARD_SELECTORS = [
   '[role="link"][title]',
 ];
 
-const NAV_OR_ACTION = /^(home|search|my stuff|watchlist|my watchlist|my list|saved|favorites?|movies|shows|series|tv|live|sports|settings|account|play|add|remove|more|details|info|watch now|continue watching|sign in|log in)$/i;
+const NAV_OR_ACTION = /^(home|search|my stuff|watchlist|watch list|my watchlist|my list|saved|favorites?|movies|shows|series|tv|live|sports|settings|account|play|add|remove|more|details|info|watch now|continue watching|sign in|log in)$/i;
 
 function cleanText(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
