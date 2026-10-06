@@ -59,44 +59,33 @@ function isVisible(element) {
 }
 
 async function clickSavedControl(config) {
-  const controls = [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')].filter(isVisible);
-  const providerPatterns = config.provider === 'Pluto TV'
-    ? [/^watch\s*list$/i, /^watchlist$/i, /^my\s*list$/i, /^saved$/i]
-    : config.provider === 'Tubi'
-      ? [/^history\s*&\s*my\s*list$/i, /^my\s*list$/i, /^watchlist$/i, /^saved$/i]
-      : [];
+  const getControls = () => [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')].filter(isVisible);
+  const getLabel = node => cleanText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '');
+  const clickMatching = async patterns => {
+    const control = getControls().find(node => patterns.some(pattern => pattern.test(getLabel(node))));
+    if (!control) return false;
+    control.click();
+    await new Promise(resolve => setTimeout(resolve, 900));
+    return true;
+  };
 
-  for (const pattern of providerPatterns) {
-    const control = controls.find(node => pattern.test(cleanText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '')));
-    if (control) {
-      control.click();
-      await new Promise(resolve => setTimeout(resolve, 900));
-      return true;
+  if (config.provider === 'Pluto TV') {
+    if (await clickMatching([/^watch\s*list$/i, /^watchlist$/i, /^my\s*list$/i, /^saved$/i])) return true;
+    if (await clickMatching([/^on\s*demand$/i, /^on-demand$/i])) {
+      if (await clickMatching([/^watch\s*list$/i, /^watchlist$/i, /^my\s*list$/i, /^saved$/i])) return true;
     }
+    if (await clickMatching([/profile\s*options|^profile$|^account$/i])) {
+      if (await clickMatching([/^watch\s*list$/i, /^watchlist$/i, /^my\s*list$/i, /^saved$/i])) return true;
+    }
+    return false;
   }
 
-  if (config.provider === 'Pluto TV' || config.provider === 'Tubi') {
-    const profileControl = controls.find(node => {
-      const label = cleanText(node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent || '');
-      return /profile\s*options|profile|account/i.test(label);
-    }) || controls.find(node => {
-      const label = cleanText(node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent || '');
-      return /\bperson\s*\d+\b/i.test(label);
-    });
-    if (profileControl) {
-      profileControl.click();
-      await new Promise(resolve => setTimeout(resolve, 500));
-      for (const pattern of providerPatterns) {
-        const savedControl = [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')]
-          .filter(isVisible)
-          .find(node => pattern.test(cleanText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '')));
-        if (savedControl) {
-          savedControl.click();
-          await new Promise(resolve => setTimeout(resolve, 900));
-          return true;
-        }
-      }
+  if (config.provider === 'Tubi') {
+    if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i, /^watchlist$/i, /^saved$/i])) return true;
+    if (await clickMatching([/^account\s*settings$/i])) {
+      if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
     }
+    return false;
   }
 
   return false;
