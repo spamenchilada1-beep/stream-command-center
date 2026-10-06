@@ -4,8 +4,8 @@ const SAVED_LIBRARY_PROVIDERS = {
   'www.max.com': { provider: 'Max', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i] },
   'www.paramountplus.com': { provider: 'Paramount+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
   'tv.apple.com': { provider: 'Apple TV+', patterns: [/\bup next\b/i, /\bwatchlist\b/i, /\bmy list\b/i, /\bsaved\b/i] },
-  'www.tubitv.com': { provider: 'Tubi', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
-  'tubitv.com': { provider: 'Tubi', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
+  'www.tubitv.com': { provider: 'Tubi', patterns: [/\bhistory\b/i, /\bhistory\s*&\s*my list\b/i, /\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
+  'tubitv.com': { provider: 'Tubi', patterns: [/\bhistory\b/i, /\bhistory\s*&\s*my list\b/i, /\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
   'www.crunchyroll.com': { provider: 'Crunchyroll', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
   'www.mgmplus.com': { provider: 'MGM+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
   'www.starz.com': { provider: 'STARZ', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
@@ -24,7 +24,7 @@ const SAVED_LIBRARY_PROVIDERS = {
   'www.criterionchannel.com': { provider: 'Criterion Channel', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
   'www.dropout.tv': { provider: 'Dropout', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
   'www.hidive.com': { provider: 'HIDIVE', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
-  'pluto.tv': { provider: 'Pluto TV', patterns: [/\bfavorites?\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bwatch\s+list\b/i, /\bwatchlist\b/i] },
+  'pluto.tv': { provider: 'Pluto TV', patterns: [/\bwatch\s+list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i, /\bmy list\b/i] },
   'www.roku.com': { provider: 'The Roku Channel', patterns: [/\bmy list\b/i, /\bsaved\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i] },
   'www.plex.tv': { provider: 'Plex', patterns: [/\bwatchlist\b/i, /\bsaved\b/i, /\bmy list\b/i, /\bfavorites?\b/i] },
 };
@@ -36,6 +36,9 @@ const CARD_SELECTORS = [
   '[data-testid][aria-label]',
   '[role="link"][aria-label]',
   '[role="link"][title]',
+  'a[href] img[alt]',
+  'article img[alt]',
+  '[data-testid] img[alt]',
 ];
 
 const NAV_OR_ACTION = /^(home|search|my stuff|watchlist|watch list|my watchlist|my list|saved|favorites?|movies|shows|series|tv|live|sports|settings|account|play|add|remove|more|details|info|watch now|continue watching|sign in|log in)$/i;
@@ -52,6 +55,19 @@ function normalizeTitle(value) {
 
 function findSavedRoot(config) {
   const candidates = [...document.querySelectorAll('main section, main [role="region"], section, [role="region"]')];
+  const priorityPatterns = config.provider === 'Pluto TV'
+    ? [/\bwatch\s+list\b/i, /\bwatchlist\b/i, /\bsaved\b/i]
+    : config.provider === 'Tubi'
+      ? [/\bhistory\s*&\s*my list\b/i, /\bmy list\b/i]
+      : [];
+
+  for (const candidate of candidates) {
+    const heading = cleanText(
+      candidate.querySelector('h1, h2, h3, [role="heading"]')?.textContent || '',
+    );
+
+    if (priorityPatterns.some(pattern => pattern.test(heading))) return candidate;
+  }
 
   for (const candidate of candidates) {
     const heading = cleanText(
@@ -82,12 +98,17 @@ function extractItems(root, provider) {
   const seen = new Set();
 
   elements.forEach(element => {
-    const href = element.getAttribute('href') || '';
+    const link = element.closest('a[href]') || element;
+    const href = link.getAttribute('href') || '';
     if (href && /\/(account|search|login|signup|support|terms|privacy)\b/i.test(href)) return;
 
     const title = normalizeTitle(
       element.getAttribute('aria-label') ||
       element.getAttribute('title') ||
+      element.getAttribute('alt') ||
+      link.getAttribute('aria-label') ||
+      link.getAttribute('title') ||
+      link.querySelector('img')?.getAttribute('alt') ||
       element.querySelector('img')?.getAttribute('alt') ||
       element.textContent ||
       '',
