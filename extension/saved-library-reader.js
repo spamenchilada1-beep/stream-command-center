@@ -109,7 +109,10 @@ function findSavedRoot(config) {
       candidate.querySelector('h1, h2, h3, [role="heading"]')?.textContent || '',
     );
 
-    if (priorityPatterns.some(pattern => pattern.test(heading))) return candidate;
+    if (priorityPatterns.some(pattern => pattern.test(heading))) {
+      const cardCount = candidate.querySelectorAll(CARD_SELECTORS.join(',')).length;
+      if (cardCount > 0) return candidate;
+    }
   }
 
   if (config.provider !== 'Tubi' && config.provider !== 'Pluto TV') {
@@ -218,13 +221,15 @@ async function scanSavedLibrary(config) {
 
   if (!root && (config.provider === 'Tubi' || config.provider === 'Pluto TV')) {
     navigationAttempted = await clickSavedControl(config);
-    root = findSavedRoot(config);
   }
 
   while (Date.now() - started < 12000) {
     root = root?.isConnected ? root : findSavedRoot(config);
 
-    if (!root) break;
+    if (!root) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      continue;
+    }
 
     for (const item of extractItems(root, config.provider)) {
       if (!seen.has(item.id)) seen.set(item.id, item);
