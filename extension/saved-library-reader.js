@@ -85,7 +85,12 @@ function findSavedRoot(config) {
     if (root) return root;
   }
 
-  if (/(?:^|\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later|account\/history)(?:$|\/)/i.test(location.pathname)) {
+  const savedPathSegments = new Set([
+    'my-stuff', 'my-list', 'watchlist', 'watch-list', 'favorites', 'favorite', 'saved',
+    'library', 'up-next', 'watch-later', 'history', 'account',
+  ]);
+  const pathSegments = location.pathname.split('/').filter(Boolean).map(segment => segment.toLowerCase());
+  if (pathSegments.some(segment => savedPathSegments.has(segment)) || location.pathname.toLowerCase().includes('/account/history')) {
     return document.querySelector('main') || document.body;
   }
 
