@@ -194,6 +194,9 @@ function getProviderAdapter(url) {
 const AUTH_PATH_PATTERN = /(?:^|\/)(?:login|signin|sign-in|signup|sign-up|register)(?:\/|$)/i;
 const SAVED_PATH_PATTERN = /(?:^|\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later)(?:\/|$)/i;
 const HISTORY_PATH_PATTERN = /(?:^|\/)account\/history(?:\/|$)/i;
+const PROVIDER_SCAN_TARGETS = {
+  netflix: 'https://www.netflix.com/browse/my-list',
+};
 
 function getProviderTabPriority(url, providerId) {
   try {
@@ -312,9 +315,15 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         diagnostics: message.diagnostics || null,
       });
 
+      const temporaryProviderTabIds = Array.isArray(session.temporaryProviderTabIds)
+        ? session.temporaryProviderTabIds
+        : [];
       const completedProviderTabIds = Array.from(
         new Set([...(session.completedProviderTabIds || []), senderTabId]),
       );
+      if (temporaryProviderTabIds.includes(senderTabId)) {
+        await chrome.tabs.remove(senderTabId).catch(() => {});
+      }
       const allProvidersComplete =
         providerTabIds.length > 0 && completedProviderTabIds.length >= providerTabIds.length;
 
@@ -367,7 +376,34 @@ async function sendToProviderTabs(nonce, sccTabId) {
     }
   }
 
-  const eligibleProviderTabs = [...bestByProvider.values()].map(candidate => candidate.tab);
+  const preparedCandidates = [];
+  const temporaryProviderTabIds = [];
+  for (const candidate of bestByProvider.values()) {
+    const targetUrl = PROVIDER_SCAN_TARGETS[candidate.providerId];
+    if (!targetUrl) {
+      preparedCandidates.push({ ...candidate, temporary: false });
+      continue;
+    }
+
+    try {
+      const scanTab = await chrome.tabs.create({ url: targetUrl, active: false });
+      if (!scanTab.id) throw new Error(candidate.providerId + ' scan tab could not be created.');
+      temporaryProviderTabIds.push(scanTab.id);
+      preparedCandidates.push({
+        ...candidate,
+        tab: scanTab,
+        temporary: true,
+      });
+    } catch (error) {
+      scanErrors.push({
+        tabId: candidate.tab.id,
+        url: candidate.tab.url,
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
+    }
+  }
+
+  const eligibleProviderTabs = preparedCandidates.map(candidate => candidate.tab);
   const providerTabIds = eligibleProviderTabs.map(tab => tab.id);
   const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   const session = await getSession(nonce);
@@ -375,23 +411,28 @@ async function sendToProviderTabs(nonce, sccTabId) {
   await updateSession(nonce, {
     providerTabIds,
     completedProviderTabIds: [],
+    temporaryProviderTabIds,
     restoreTabId,
   });
 
-  const visibleProviderTabs = [...bestByProvider.values()].map(candidate => ({
+  const visibleProviderTabs = preparedCandidates.map(candidate => ({
     id: candidate.tab.id,
     providerId: candidate.providerId,
     priority: candidate.priority,
+    temporary: candidate.temporary,
     url: candidate.tab.url,
     title: candidate.tab.title || '',
   }));
 
-  for (const tab of eligibleProviderTabs) {
+  for (const candidate of preparedCandidates) {
+    const tab = candidate.tab;
     const adapter = getProviderAdapter(tab.url);
 
     try {
       await updateSession(nonce, { providerTabId: tab.id });
-      await chrome.tabs.update(tab.id, { active: true });
+      if (!candidate.temporary) {
+        await chrome.tabs.update(tab.id, { active: true });
+      }
       await new Promise(resolve => setTimeout(resolve, 1000));
       await adapter.scan(tab.id, nonce);
       scanCount += 1;
@@ -401,6 +442,9 @@ async function sendToProviderTabs(nonce, sccTabId) {
         url: tab.url,
         error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
       });
+      if (candidate.temporary) {
+        await chrome.tabs.remove(tab.id).catch(() => {});
+      }
     }
   }
 
