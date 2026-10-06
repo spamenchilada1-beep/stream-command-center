@@ -356,13 +356,7 @@ async function sendToProviderTabs(nonce, sccTabId) {
   };
 }
 
-chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-  const senderOrigin = sender.origin || (sender.url ? new URL(sender.url).origin : '');
-  if (senderOrigin !== SCC_ORIGIN) {
-    sendResponse({ ok: false, reason: 'origin-not-allowed' });
-    return;
-  }
-
+async function handleImportStart(message, sender, sendResponse) {
   if (message?.type !== 'scc:import-start' || typeof message.nonce !== 'string' || message.nonce.length < 16) {
     sendResponse({ ok: false, reason: 'unsupported-message' });
     return;
@@ -388,6 +382,21 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     .catch(() => sendResponse({ ok: false, reason: 'import-start-failed' }));
 
   return true;
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'scc:import-start') return;
+  return handleImportStart(message, sender, sendResponse);
+});
+
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  const senderOrigin = sender.origin || (sender.url ? new URL(sender.url).origin : '');
+  if (senderOrigin !== SCC_ORIGIN) {
+    sendResponse({ ok: false, reason: 'origin-not-allowed' });
+    return;
+  }
+
+  return handleImportStart(message, sender, sendResponse);
 });
 
 chrome.tabs.onRemoved.addListener(async tabId => {

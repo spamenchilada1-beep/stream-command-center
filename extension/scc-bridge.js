@@ -9,7 +9,7 @@ window.addEventListener('message', event => {
 
   try {
     chrome.runtime.sendMessage({
-      type: 'scc-session-start',
+      type: 'scc:import-start',
       nonce: message.nonce,
     }).catch(() => {});
   } catch {
