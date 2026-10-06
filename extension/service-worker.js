@@ -196,6 +196,7 @@ const SAVED_PATH_PATTERN = /(?:^|\/)(?:my-stuff|my-list|watchlist|favorites?|sav
 const HISTORY_PATH_PATTERN = /(?:^|\/)account\/history(?:\/|$)/i;
 const PROVIDER_SCAN_TARGETS = {
   netflix: 'https://www.netflix.com/browse/my-list',
+  tubi: 'https://tubitv.com/account/history',
 };
 
 function getProviderTabPriority(url, providerId) {

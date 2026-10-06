@@ -5,6 +5,7 @@ const SAVED_LIBRARY_PROVIDERS = {
   'www.paramountplus.com': { provider: 'Paramount+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bfavorites?\b/i, /\bsaved\b/i] },
   'tv.apple.com': { provider: 'Apple TV+', patterns: [/\bup next\b/i, /\bwatchlist\b/i, /\bmy list\b/i, /\bsaved\b/i] },
   'www.tubitv.com': { provider: 'Tubi', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
+  'tubitv.com': { provider: 'Tubi', patterns: [/\bmy stuff\b/i, /\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
   'www.crunchyroll.com': { provider: 'Crunchyroll', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
   'www.mgmplus.com': { provider: 'MGM+', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i] },
   'www.starz.com': { provider: 'STARZ', patterns: [/\bmy list\b/i, /\bwatchlist\b/i, /\bsaved\b/i, /\bfavorites?\b/i] },
@@ -68,7 +69,7 @@ function findSavedRoot(config) {
     if (root) return root;
   }
 
-  if (/(?:^|\\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later)(?:$|\\/)/i.test(location.pathname)) {
+  if (/(?:^|\/)(?:my-stuff|my-list|watchlist|favorites?|saved|library|up-next|watch-later|account\/history)(?:$|\/)/i.test(location.pathname)) {
     return document.querySelector('main') || document.body;
   }
 
