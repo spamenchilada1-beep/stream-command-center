@@ -278,6 +278,7 @@ function App() {
   const [importNonce, setImportNonce] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const importNonceRef = useRef<string | null>(null);
+  const importAckTimerRef = useRef<number | null>(null);
   const lastAutoLaunchCommand = useRef<number | null>(null);
   const lastBridgeCommands = useRef<Record<string, number>>({});
 
@@ -285,6 +286,15 @@ function App() {
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
 
   useEffect(() => {
+    const handleImportAck = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (data?.source !== 'stream-command-extension' || data?.type !== 'scc:import-start-ack') return;
+      if (data.nonce !== importNonceRef.current) return;
+      if (importAckTimerRef.current !== null) { window.clearTimeout(importAckTimerRef.current); importAckTimerRef.current = null; }
+      setImportMessage(data.ok === true ? 'Importer bridge acknowledged. Provider scanning started.' : 'Importer bridge reached the extension but start failed: ' + (data.reason || 'unknown extension error'));
+    };
+
     const handleImportMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (!isWatchlistImportMessage(event.data)) return;
@@ -318,8 +328,13 @@ function App() {
       // The import is ended by the session timeout or a new import request.
     };
 
+    window.addEventListener('message', handleImportAck);
     window.addEventListener('message', handleImportMessage);
-    return () => window.removeEventListener('message', handleImportMessage);
+    return () => {
+      window.removeEventListener('message', handleImportAck);
+      window.removeEventListener('message', handleImportMessage);
+      if (importAckTimerRef.current !== null) window.clearTimeout(importAckTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -791,6 +806,10 @@ function App() {
                 },
                 window.location.origin,
               );
+              if (importAckTimerRef.current !== null) window.clearTimeout(importAckTimerRef.current);
+              importAckTimerRef.current = window.setTimeout(() => {
+                if (importNonceRef.current === nonce) setImportMessage('Importer diagnostic: no extension bridge acknowledgement was received.');
+              }, 3000);
             }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import watchlists</button></div>{importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
           </section>}
         </main>

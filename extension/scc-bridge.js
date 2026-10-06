@@ -11,9 +11,40 @@ window.addEventListener('message', event => {
     chrome.runtime.sendMessage({
       type: 'scc:import-start',
       nonce: message.nonce,
-    }).catch(() => {});
-  } catch {
-    // Ignore stale content-script contexts after an extension reload.
+    }).then(response => {
+      window.postMessage(
+        {
+          source: 'stream-command-extension',
+          type: 'scc:import-start-ack',
+          nonce: message.nonce,
+          ok: response?.ok === true,
+          reason: response?.reason || null,
+        },
+        SCC_ORIGIN,
+      );
+    }).catch(error => {
+      window.postMessage(
+        {
+          source: 'stream-command-extension',
+          type: 'scc:import-start-ack',
+          nonce: message.nonce,
+          ok: false,
+          reason: String(error?.message || error || 'runtime-message-failed'),
+        },
+        SCC_ORIGIN,
+      );
+    });
+  } catch (error) {
+    window.postMessage(
+      {
+        source: 'stream-command-extension',
+        type: 'scc:import-start-ack',
+        nonce: message.nonce,
+        ok: false,
+        reason: String(error?.message || error || 'bridge-send-failed'),
+      },
+      SCC_ORIGIN,
+    );
   }
 });
 
