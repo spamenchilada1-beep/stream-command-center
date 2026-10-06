@@ -304,6 +304,7 @@ function App() {
       setWatchlist(current => mergeImportedWatchlist(current, imported));
 
       const diagnostics = event.data.diagnostics as {
+        provider?: string;
         url?: string;
         title?: string;
         readyState?: string;
@@ -317,11 +318,13 @@ function App() {
         const path = diagnostics.url ? new URL(diagnostics.url).pathname : 'unknown';
         const sliderHits = diagnostics.selectorCounts?.['.slider-item .slider-refocus[aria-label]'] ?? 0;
         const titleCardHits = diagnostics.selectorCounts?.['.title-card a[aria-label]'] ?? 0;
+        const providerLabel = diagnostics.provider || 'Provider';
         setImportMessage(
-          `0 titles imported. Netflix: ${path}; visibility=${diagnostics.visibilityState || 'unknown'}; slider-cards=${sliderHits}; title-cards=${titleCardHits}; watch-links=${diagnostics.watchLinkCount ?? 0}; aria-labels=${diagnostics.ariaLabelCount ?? 0}.`,
+          `0 titles imported. ${providerLabel}: ${path}; visibility=${diagnostics.visibilityState || 'unknown'}; slider-cards=${sliderHits}; title-cards=${titleCardHits}; watch-links=${diagnostics.watchLinkCount ?? 0}; aria-labels=${diagnostics.ariaLabelCount ?? 0}.`,
         );
       } else {
-        setImportMessage(`${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
+        const providerLabel = diagnostics?.provider ? `${diagnostics.provider}: ` : '';
+        setImportMessage(`${providerLabel}${imported.length} title${imported.length === 1 ? '' : 's'} imported.`);
       }
 
       // Keep the import nonce active so results from every open provider are accepted.
