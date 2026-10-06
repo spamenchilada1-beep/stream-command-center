@@ -78,7 +78,10 @@ async function clickSavedControl(config) {
   if (config.provider === 'Pluto TV' || config.provider === 'Tubi') {
     const profileControl = controls.find(node => {
       const label = cleanText(node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent || '');
-      return /profile|account/i.test(label) || /\bperson\s*\d+\b/i.test(label);
+      return /profile\s*options|profile|account/i.test(label);
+    }) || controls.find(node => {
+      const label = cleanText(node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent || '');
+      return /\bperson\s*\d+\b/i.test(label);
     });
     if (profileControl) {
       profileControl.click();
