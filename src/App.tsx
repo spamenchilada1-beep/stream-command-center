@@ -7,6 +7,7 @@ import { auth, db } from './firebase';
 import { getProviderConnection } from './providerConnections';
 import { getAvailability, type AvailabilityResult } from './availability';
 import { createImportNonce, isWatchlistImportMessage, mergeImportedWatchlist, normalizeImportedItems } from './watchlistImporter';
+import { beginTraktAuthorization, clearTraktExclusions, disconnectTrakt, excludeTraktTitle, finishTraktOAuthCallback, hasTraktConnection, hasTraktExclusions, isTraktConfigured, isTraktOAuthCallback, syncTraktWatchlist } from './trakt';
 
 type Provider = {
   id: string;
@@ -23,6 +24,7 @@ type SavedTitle = {
   type: 'Movie' | 'Series';
   provider: string;
   accent: string;
+  source?: 'trakt';
 };
 
 type TvPlatform = 'google-tv' | 'fire-tv' | 'roku' | 'apple-tv' | 'samsung' | 'lg' | 'browser';
@@ -283,6 +285,10 @@ function App() {
   const [manualTitleType, setManualTitleType] = useState<'Movie' | 'Series'>('Series');
   const [manualTitleProvider, setManualTitleProvider] = useState('Netflix');
   const [manualTitleError, setManualTitleError] = useState('');
+  const [traktConnected, setTraktConnected] = useState(() => hasTraktConnection());
+  const [traktHasHiddenTitles, setTraktHasHiddenTitles] = useState(() => hasTraktExclusions());
+  const [traktBusy, setTraktBusy] = useState(false);
+  const [traktMessage, setTraktMessage] = useState('');
   const importNonceRef = useRef<string | null>(null);
   const importAckTimerRef = useRef<number | null>(null);
   const lastAutoLaunchCommand = useRef<number | null>(null);
@@ -290,6 +296,48 @@ function App() {
 
   useEffect(() => { localStorage.setItem('stream-connected', JSON.stringify(connected)); }, [connected]);
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const handleTraktStartup = async () => {
+      const isCallback = isTraktOAuthCallback();
+      if (isCallback) {
+        setActiveTab('watchlist');
+        setTraktBusy(true);
+        setTraktMessage('Finishing Trakt connection...');
+        try {
+          const result = await finishTraktOAuthCallback();
+          if (cancelled) return;
+          setWatchlist(current => mergeImportedWatchlist(current, result.items));
+          setTraktConnected(true);
+          setTraktMessage('Trakt connected. Synced ' + result.total + ' title' + (result.total === 1 ? '' : 's') + '.');
+        } catch (error) {
+          if (cancelled) return;
+          setTraktConnected(hasTraktConnection());
+          setTraktMessage(error instanceof Error ? error.message : 'Trakt authorization failed. Please try again.');
+        } finally {
+          if (!cancelled) setTraktBusy(false);
+        }
+        return;
+      }
+
+      if (!isTraktConfigured() || !hasTraktConnection()) return;
+      setTraktConnected(true);
+      try {
+        setTraktBusy(true);
+        const result = await syncTraktWatchlist();
+        if (cancelled) return;
+        setWatchlist(current => mergeImportedWatchlist(current, result.items));
+        setTraktMessage('Trakt watchlist synced: ' + result.total + ' title' + (result.total === 1 ? '' : 's') + '.');
+      } catch (error) {
+        if (!cancelled) setTraktMessage(error instanceof Error ? error.message : 'Trakt sync failed. Please reconnect and try again.');
+      } finally {
+        if (!cancelled) setTraktBusy(false);
+      }
+    };
+    void handleTraktStartup();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!ENABLE_TEST_WATCHLIST_IMPORT) return;
@@ -543,6 +591,67 @@ function App() {
     }
   };
 
+  const handleTraktConnectOrSync = async () => {
+    if (traktBusy) return;
+    if (!isTraktConfigured()) {
+      setTraktMessage('Trakt is not configured yet. Register an API app, then add VITE_TRAKT_CLIENT_ID and VITE_TRAKT_REDIRECT_URI to the deployment settings.');
+      return;
+    }
+
+    setTraktBusy(true);
+    setTraktMessage(traktConnected ? 'Syncing your Trakt watchlist...' : 'Opening Trakt authorization...');
+    try {
+      if (!traktConnected) {
+        await beginTraktAuthorization();
+        return;
+      }
+      const result = await syncTraktWatchlist();
+      setWatchlist(current => mergeImportedWatchlist(current, result.items));
+      setTraktConnected(true);
+      setTraktMessage('Trakt watchlist synced: ' + result.total + ' title' + (result.total === 1 ? '' : 's') + '.');
+    } catch (error) {
+      setTraktConnected(hasTraktConnection());
+      setTraktMessage(error instanceof Error ? error.message : 'Trakt sync failed. Please try again.');
+    } finally {
+      setTraktBusy(false);
+    }
+  };
+
+  const handleTraktDisconnect = () => {
+    disconnectTrakt();
+    setTraktConnected(false);
+    setTraktMessage('Trakt disconnected. Previously imported titles remain in your Stream Command watchlist.');
+  };
+
+  const removeWatchlistTitle = (title: SavedTitle) => {
+    setWatchlist(current => current.filter(item => item.id !== title.id));
+    if (title.source === 'trakt') {
+      excludeTraktTitle(title.id);
+      setTraktHasHiddenTitles(true);
+      setTraktMessage(title.title + ' was removed from Stream Command. It remains in your Trakt account.');
+    }
+  };
+
+  const restoreHiddenTraktTitles = async () => {
+    clearTraktExclusions();
+    setTraktHasHiddenTitles(false);
+    if (!traktConnected) {
+      setTraktMessage('Hidden Trakt titles cleared. Connect Trakt and sync to restore them.');
+      return;
+    }
+    setTraktBusy(true);
+    setTraktMessage('Restoring previously hidden Trakt titles…');
+    try {
+      const result = await syncTraktWatchlist();
+      setWatchlist(current => mergeImportedWatchlist(current, result.items));
+      setTraktMessage('Restored from Trakt. Synced ' + result.total + ' title' + (result.total === 1 ? '' : 's') + '.');
+    } catch (error) {
+      setTraktMessage(error instanceof Error ? error.message : 'Could not restore Trakt titles. Try syncing again.');
+    } finally {
+      setTraktBusy(false);
+    }
+  };
+
   const submitAccount = async () => {
     const email = accountForm.email.trim();
     const password = accountForm.password;
@@ -668,8 +777,14 @@ function App() {
     const activeSession = sessionOverride || pairingSession; const platform = (activeSession?.platform || tvPlatform) as TvPlatform;
     const result = await getAvailability(title.title);
     const sources = result.availability || [];
-    const preferred = sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
-    const providerName = title.provider;
+    const preferred = title.source === 'trakt'
+      ? sources.find(item => {
+          if (!item.webUrl) return false;
+          const catalogProvider = providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(item.providerName));
+          return !!catalogProvider && connected.includes(catalogProvider.id);
+        }) || sources.find(item => !!item.webUrl) || sources[0]
+      : sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
+    const providerName = title.source === 'trakt' ? (preferred?.providerName || 'No matching streaming service found') : title.provider;
     const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
     const targetUrl = platform === 'samsung'
       ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : preferred?.webUrl || null)
@@ -780,7 +895,7 @@ function App() {
                   <button onClick={() => setActiveTab('services')} className="mt-7 flex w-full items-center justify-between rounded-2xl border border-white/10 p-4 text-sm hover:bg-white/5">Explore provider catalog <ChevronRight size={17} /></button>
                 </div>
               </section>
-              <section className="mt-8"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.2em] text-white/35">Watch next</p><h2 className="mt-1 text-2xl font-semibold">Your saved list</h2></div><button onClick={() => setActiveTab('watchlist')} className="text-sm text-white/45 hover:text-white">View all</button></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} /></section>
+              <section className="mt-8"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.2em] text-white/35">Watch next</p><h2 className="mt-1 text-2xl font-semibold">Your saved list</h2></div><button onClick={() => setActiveTab('watchlist')} className="text-sm text-white/45 hover:text-white">View all</button></div><TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} /></section>
             </>
           )}
 
@@ -821,11 +936,11 @@ function App() {
               importAckTimerRef.current = window.setTimeout(() => {
                 if (importNonceRef.current === nonce) setImportMessage('Importer diagnostic: no extension bridge acknowledgement was received.');
               }, 3000);
-            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
+            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div><div className="mb-5 flex flex-wrap items-center gap-2"><button onClick={handleTraktConnectOrSync} disabled={traktBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] disabled:opacity-50">{traktBusy ? 'Syncing Trakt...' : traktConnected ? 'Sync Trakt' : 'Connect Trakt'}</button>{traktConnected && <button onClick={handleTraktDisconnect} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Disconnect Trakt</button>}{traktHasHiddenTitles && <button onClick={restoreHiddenTraktTitles} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Restore hidden titles</button>}{traktMessage && <p role="status" className="w-full text-xs text-white/45">{traktMessage}</p>}</div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} />
           </section>}
         </main>
 
-        <footer className="mt-12 border-t border-white/10 pt-5 text-xs text-white/25">Working prototype • Provider-agnostic architecture • Catalog metadata only for now</footer>
+        <footer className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5 text-xs text-white/25"><span>Stream Command | Provider-agnostic architecture | Catalog metadata only for now</span><a href="/privacy.html" className="text-white/45 underline underline-offset-4 hover:text-white/75">Privacy</a></footer>
       </div>
       {showAccount && <Modal title={accountMode === 'signed-in' ? 'Your Stream Command account' : 'Save your streaming setup'} onClose={() => { setShowAccount(false); setAccountMessage(''); }}>
         {accountMode === 'signed-in' ? <>
@@ -991,8 +1106,8 @@ function Stat({ label, value }: { label: string; value: string }) {
   return <div className="flex items-end justify-between border-b border-white/10 pb-3"><span className="text-sm text-white/40">{label}</span><span className="text-2xl font-semibold">{value}</span></div>;
 }
 
-function TitleGrid({ titles, onWatch, onWhereToWatch }: { titles: SavedTitle[]; onWatch: (title: SavedTitle) => void; onWhereToWatch: (title: SavedTitle) => void }) {
-  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{titles.map(title => <article key={title.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]"><div className={`flex h-40 items-end bg-gradient-to-br ${title.accent} p-5`}><div><span className="text-xs uppercase tracking-[0.18em] text-white/45">{title.type}</span><h3 className="mt-1 text-2xl font-semibold">{title.title}</h3></div></div><div className="flex items-center justify-between p-4"><div><p className="text-sm">{title.provider}</p><p className="text-xs text-white/35">Saved to your list</p></div><div className="flex gap-2"><button onClick={() => onWhereToWatch(title)} className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/5">Where to watch</button><button onClick={() => onWatch(title)} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-black">Watch on TV</button></div></div></article>)}</div>;
+function TitleGrid({ titles, onWatch, onWhereToWatch, onRemove }: { titles: SavedTitle[]; onWatch: (title: SavedTitle) => void; onWhereToWatch: (title: SavedTitle) => void; onRemove: (title: SavedTitle) => void }) {
+  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{titles.map(title => <article key={title.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]"><div className={`flex h-40 items-end bg-gradient-to-br ${title.accent} p-5`}><div><span className="text-xs uppercase tracking-[0.18em] text-white/45">{title.type}</span><h3 className="mt-1 text-2xl font-semibold">{title.title}</h3></div></div><div className="flex items-center justify-between p-4"><div><p className="text-sm">{title.source === 'trakt' ? 'Trakt watchlist' : title.provider}</p><p className="text-xs text-white/35">Saved to your list</p></div><div className="flex gap-2"><button onClick={() => onWhereToWatch(title)} className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/5">Where to watch</button><button onClick={() => onWatch(title)} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-black">Watch on TV</button><button onClick={() => onRemove(title)} aria-label={'Remove ' + title.title + ' from Stream Command'} title="Remove from Stream Command" className="grid h-8 w-8 place-items-center self-center rounded-full border border-white/10 text-white/40 hover:bg-white/5 hover:text-white"><X size={14} /></button></div></div></article>)}</div>;
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
