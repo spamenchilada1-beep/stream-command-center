@@ -23,7 +23,7 @@ const fireTvApps = {
   hulu: 'com.hulu.plus/.SplashActivity',
   disneyplus: 'com.disney.disneyplus/.MainActivity',
   peacock: 'com.peacock.peacockfiretv/com.peacock.peacocktv.AmazonMainActivity',
-  tubi: 'com.tubitv.ott/.MainActivity',
+  tubi: 'com.tubitv.ott/com.tubitv.activities.FireTVMainActivity',
   starz: 'com.starz.starzplay.firetv/.MainActivity',
   amc: 'com.amctve.amcfiretv/.MainActivity',
   apple: 'com.apple.atve.amazon.appletv/.MainActivity',
@@ -243,7 +243,7 @@ async function main() {
   startBridgeServer();
   await runAdb(['connect', FIRE_TV]).catch(error => console.error('[BRIDGE] Fire TV ADB connect:', error.message));
   console.log('[BRIDGE] Fire TV + Samsung native handoff ready');
-  launchBridgeBrowser();
+  if (process.env.BRIDGE_SKIP_BROWSER !== '1') launchBridgeBrowser();
 }
 
 main().catch(error => {
