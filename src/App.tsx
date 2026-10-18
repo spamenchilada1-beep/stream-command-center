@@ -140,7 +140,17 @@ const providerWebFallbacks: Record<string, string> = {
 };
 
 function normalizeProviderName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const aliases: Record<string, string> = {
+    amazonprimevideo: 'primevideo',
+    amazonprime: 'primevideo',
+    hbomax: 'max',
+    disney: 'disneyplus',
+    paramount: 'paramountplus',
+    appletvplus: 'appletvplus',
+    therokuchannel: 'rokuchannel',
+  };
+  return aliases[normalized] || normalized;
 }
 
 function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }, webUrl: string | null = null): string | null {
