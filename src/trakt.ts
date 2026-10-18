@@ -21,18 +21,11 @@ type TraktBackendResult = {
   error?: string;
 };
 
-type TraktResponse = {
-  data: unknown;
-  headers: Headers;
-};
-
-const API_BASE = 'https://api.trakt.tv';
 const AUTH_BASE = 'https://auth.trakt.tv';
 const CONNECTED_STORAGE_KEY = 'stream-trakt-connected-v1';
 const EXCLUDED_STORAGE_KEY = 'stream-trakt-excluded-title-ids-v1';
 const STATE_STORAGE_KEY = 'stream-trakt-oauth-state';
 const VERIFIER_STORAGE_KEY = 'stream-trakt-code-verifier';
-const DEFAULT_ACCENT = 'from-cyan-500/30 to-indigo-950';
 
 function getEnvValue(name: string): string {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
@@ -166,17 +159,6 @@ function clearOAuthQueryParameters(): void {
   const url = new URL(window.location.href);
   ['code', 'state', 'error', 'error_description'].forEach(key => url.searchParams.delete(key));
   window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-}
-
-async function responseError(response: Response): Promise<Error> {
-  let detail = '';
-  try {
-    const body = await response.json() as { error_description?: string; error?: string; message?: string };
-    detail = body.error_description || body.message || body.error || '';
-  } catch {
-    // Some error responses do not contain JSON.
-  }
-  return new Error(detail || ('Trakt request failed (' + response.status + ').'));
 }
 
 function normalizeResult(result: TraktBackendResult): TraktSyncResult {
