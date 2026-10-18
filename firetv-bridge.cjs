@@ -85,6 +85,7 @@ async function launchFireTv(command) {
   if (provider === 'primevideo' &&
       (uri.startsWith('amzn://') || uri.includes('app.primevideo.com/watch') || uri.includes('app.primevideo.com/detail'))) {
     const primeUri = uri;
+    await runAdb(['-s', FIRE_TV, 'shell', 'am', 'force-stop', 'com.amazon.avod']);
     await runAdb(['-s', FIRE_TV, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW',
       '-n', 'com.amazon.avod/.client.activity.FireTvDeepLinkRoutingActivity', '-d', primeUri]);
     return 'prime-playback';
