@@ -18,6 +18,7 @@ export type NormalizedImportedTitle = {
   type: 'Movie' | 'Series';
   provider: string;
   accent: string;
+  source?: 'trakt';
 };
 
 const DEFAULT_ACCENT = 'from-cyan-500/30 to-indigo-950';
