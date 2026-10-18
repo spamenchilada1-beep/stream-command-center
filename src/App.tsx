@@ -4,7 +4,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { getProviderConnection } from './providerConnections';
 import { getAvailability, type AvailabilityResult } from './availability';
 import { createImportNonce, isWatchlistImportMessage, mergeImportedWatchlist, normalizeImportedItems } from './watchlistImporter';
 import { beginTraktAuthorization, clearTraktExclusions, disconnectTrakt, excludeTraktTitle, finishTraktOAuthCallback, hasTraktConnection, hasTraktExclusions, isTraktConfigured, isTraktOAuthCallback, syncTraktWatchlist } from './trakt';
@@ -574,8 +573,6 @@ function App() {
   const connectProvider = (id: string) => {
     const provider = providers.find(item => item.id === id);
     if (!provider) return;
-    const connection = getProviderConnection(id);
-
     if (connected.includes(id)) {
       setConnected(current => current.filter(item => item !== id));
       setConnectionMessage(`${provider.name} removed from your Stream Command services.`);
@@ -583,12 +580,7 @@ function App() {
     }
 
     setConnected(current => [...current, id]);
-    if (connection.launchUrl) {
-      window.open(connection.launchUrl, '_blank', 'noopener,noreferrer');
-      setConnectionMessage(`${provider.name} added. Any provider sign-in happens on the provider's own site.`);
-    } else {
-      setConnectionMessage(`${provider.name} added to your Stream Command services.`);
-    }
+    setConnectionMessage(`${provider.name} added to My Services. This records your selection; it does not sign you in to the provider.`);
   };
 
   const handleTraktConnectOrSync = async () => {
@@ -867,7 +859,7 @@ function App() {
           </button>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowAccount(true)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10">{accountMode === 'signed-in' ? (accountEmail || 'Account') : 'Sign in'}</button>
-            <button onClick={() => setShowConnect(true)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10">+ Add service</button>
+            <button onClick={() => setShowConnect(true)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10">+ My services</button>
           </div>
         </header>
 
@@ -885,7 +877,7 @@ function App() {
                   <h1 className="max-w-2xl text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">Stop hunting across apps.</h1>
                   <p className="mt-5 max-w-xl text-base leading-7 text-white/55">Keep your services, saved shows, and next watch in one command center. Then send what you want to watch from your phone to the TV.</p>
                   <div className="mt-8 flex flex-wrap gap-3">
-                    <button onClick={() => setShowConnect(true)} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black">Connect services</button>
+                    <button onClick={() => setShowConnect(true)} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black">Choose services</button>
                     <button onClick={() => setShowTv(true)} className="flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"><QrCode size={17} /> Connect a TV</button>
                   </div>
                 </div>
@@ -901,7 +893,7 @@ function App() {
 
           {activeTab === 'services' && (
             <section>
-              <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Provider catalog • {providers.length} entries</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Services</h1><p className="mt-2 max-w-2xl text-white/45">Connect what you use. The catalog separates subscription, free, live TV, TVE, rental/purchase, library, specialty, and Prime Video channel relationships.</p></div>
+              <div className="mb-6"><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Provider catalog • {providers.length} entries</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Services</h1><p className="mt-2 max-w-2xl text-white/45">Choose the services you use. This personalizes your results; it does not connect provider accounts. The catalog includes subscriptions, free services, live TV, rentals, library services, and Prime Video channels.</p></div>
               <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"><Search size={18} className="text-white/35" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find Netflix, MGM+, Peacock, Tubi..." className="w-full bg-transparent text-sm outline-none placeholder:text-white/25" /></div>
               <div className="mb-5 flex gap-2 overflow-x-auto pb-1">{categories.map(item => <button key={item} onClick={() => setCategory(item)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs ${category === item ? 'border-white bg-white text-black' : 'border-white/10 text-white/45 hover:text-white'}`}>{item}</button>)}</div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">                {visibleProviders.map(provider => {
@@ -1003,11 +995,11 @@ function App() {
         <p className="mt-4 text-xs leading-5 text-white/35">Manual entries work without a browser extension. Automatic sync with streaming-account watchlists will use supported provider integrations.</p>
       </Modal>}
 
-      {showConnect && <Modal title="Connect your services" onClose={() => { setShowConnect(false); setConnectionMessage(''); }}><p className="mb-4 text-sm text-white/45">Choose a service to start its supported connection flow. Provider account authentication is being wired through individual adapters.</p>{connectionMessage && <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-3 text-xs leading-5 text-cyan-100/80">{connectionMessage}</div>}<div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}
+      {showConnect && <Modal title="Choose your services" onClose={() => { setShowConnect(false); setConnectionMessage(''); }}><p className="mb-4 text-sm text-white/45">Select the streaming services you use so Stream Command can personalize your results. This does not sign you in or verify a subscription.</p>{connectionMessage && <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-3 text-xs leading-5 text-cyan-100/80">{connectionMessage}</div>}<div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}
 
       {showWhereToWatch && selectedTitle && <Modal title={`Where to watch “${selectedTitle.title}”`} onClose={() => { setShowWhereToWatch(false); setAvailability(null); }}>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-white/45">{availability?.source === 'watchmode' ? 'Live U.S. availability' : 'Development fallback availability'}</p>
+          <p className="text-sm text-white/45">{availability && (availability.source === 'watchmode' || availability.source === 'motn') ? 'Live U.S. availability' : 'Development fallback availability'}</p>
           {availability && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/35">{availability.source}</span>}
         </div>
         {availabilityLoading ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">Checking current availability…</div> : availability && availability.availability.length > 0 ? <div className="space-y-2">
