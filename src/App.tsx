@@ -61,10 +61,10 @@ function detectTvPlatform(): TvPlatform {
 
 const tvPlatforms: { id: TvPlatform; name: string; support: string; routeType: TvCommand['routeType'] }[] = [
   { id: 'google-tv', name: 'Google TV', support: 'Direct link when available', routeType: 'deep-link' },
-  { id: 'fire-tv', name: 'Fire TV', support: 'Selected app launches tested', routeType: 'deep-link' },
+  { id: 'fire-tv', name: 'Fire TV', support: 'Native launch testing; not yet general release', routeType: 'deep-link' },
   { id: 'roku', name: 'Roku', support: 'Direct-link path present; testing needed', routeType: 'native-app' },
   { id: 'apple-tv', name: 'Apple TV', support: 'Direct-link path present; testing needed', routeType: 'native-app' },
-  { id: 'samsung', name: 'Samsung TV', support: 'Selected app launches tested', routeType: 'native-app' },
+  { id: 'samsung', name: 'Samsung TV', support: 'Native launch testing; not yet general release', routeType: 'native-app' },
   { id: 'lg', name: 'LG TV', support: 'Web fallback; native launch not implemented', routeType: 'native-app' },
   { id: 'browser', name: 'Browser / TV web', support: 'Browser fallback', routeType: 'fallback' },
 ];
