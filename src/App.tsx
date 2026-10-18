@@ -641,7 +641,7 @@ function App() {
       return;
     }
     if (!isTraktConfigured()) {
-      setTraktMessage('Trakt is not configured yet. Register an API app, then add VITE_TRAKT_CLIENT_ID and VITE_TRAKT_REDIRECT_URI to the deployment settings.');
+      setTraktMessage('Trakt is not configured yet. Register an API app, then add VITE_TRAKT_CLIENT_ID to the deployment settings.');
       return;
     }
 
