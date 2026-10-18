@@ -101,7 +101,7 @@ function decryptTokens(vault) {
     decipher.setAuthTag(Buffer.from(vault.tag, 'base64'));
     const clear = Buffer.concat([decipher.update(Buffer.from(vault.data, 'base64')), decipher.final()]).toString('utf8');
     const tokens = JSON.parse(clear);
-    if (!tokens.accessToken || !tokens.refreshToken || typeof tokens.expiresAt !== 'number') throw new Error('Invalid token payload');
+    if (!tokens.accessToken || !tokens.refreshToken || typeof tokens.expiresAt !== 'number' || typeof tokens.redirectUri !== 'string') throw new Error('Invalid token payload');
     return tokens;
   } catch {
     throw new Error('Saved Trakt connection could not be decrypted. Please reconnect Trakt.');
@@ -144,7 +144,7 @@ async function writeVault(idToken, uid, vault) {
   }
 }
 
-async function saveTokens(idToken, uid, responseData) {
+async function saveTokens(idToken, uid, responseData, redirectUri) {
   if (!responseData?.access_token || !responseData?.refresh_token || typeof responseData.expires_in !== 'number') {
     throw new Error('Trakt returned an incomplete token response. Please connect again.');
   }
@@ -152,6 +152,7 @@ async function saveTokens(idToken, uid, responseData) {
     accessToken: responseData.access_token,
     refreshToken: responseData.refresh_token,
     expiresAt: Date.now() + responseData.expires_in * 1000,
+    redirectUri,
   };
   await writeVault(idToken, uid, encryptTokens(tokens));
   return tokens;
@@ -195,7 +196,7 @@ async function exchangeCode(idToken, uid, body) {
     try { const json = await response.json(); detail = json.error_description || json.message || json.error || ''; } catch {}
     throw new Error(detail || 'Trakt authorization exchange failed (' + response.status + ').');
   }
-  await saveTokens(idToken, uid, await response.json());
+  await saveTokens(idToken, uid, await response.json(), redirectUri);
 }
 
 async function refreshTokens(idToken, uid, tokens) {
@@ -205,6 +206,7 @@ async function refreshTokens(idToken, uid, tokens) {
     body: JSON.stringify({
       refresh_token: tokens.refreshToken,
       client_id: getTraktClientId(),
+      redirect_uri: tokens.redirectUri,
       grant_type: 'refresh_token',
     }),
   });
@@ -215,7 +217,7 @@ async function refreshTokens(idToken, uid, tokens) {
     }
     throw new Error('Trakt token refresh failed (' + response.status + ').');
   }
-  const refreshed = await saveTokens(idToken, uid, await response.json());
+  const refreshed = await saveTokens(idToken, uid, await response.json(), tokens.redirectUri);
   Object.assign(tokens, refreshed);
   return tokens;
 }
