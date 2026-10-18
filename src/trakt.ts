@@ -1,3 +1,5 @@
+import { auth } from './firebase';
+
 export type TraktWatchlistTitle = {
   id: string;
   title: string;
@@ -12,10 +14,11 @@ export type TraktSyncResult = {
   total: number;
 };
 
-type TraktTokens = {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
+type TraktBackendResult = {
+  items?: TraktWatchlistTitle[];
+  total?: number;
+  connected?: boolean;
+  error?: string;
 };
 
 type TraktResponse = {
@@ -25,13 +28,11 @@ type TraktResponse = {
 
 const API_BASE = 'https://api.trakt.tv';
 const AUTH_BASE = 'https://auth.trakt.tv';
-const TOKEN_STORAGE_KEY = 'stream-trakt-tokens-v1';
+const CONNECTED_STORAGE_KEY = 'stream-trakt-connected-v1';
 const EXCLUDED_STORAGE_KEY = 'stream-trakt-excluded-title-ids-v1';
 const STATE_STORAGE_KEY = 'stream-trakt-oauth-state';
 const VERIFIER_STORAGE_KEY = 'stream-trakt-code-verifier';
 const DEFAULT_ACCENT = 'from-cyan-500/30 to-indigo-950';
-const PAGE_LIMIT = 250;
-const MAX_PAGES = 50;
 
 function getEnvValue(name: string): string {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
@@ -50,43 +51,46 @@ export function isTraktConfigured(): boolean {
   return getClientId().length > 0;
 }
 
-function loadTokens(): TraktTokens | null {
-  try {
-    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<TraktTokens>;
-    if (
-      typeof parsed.accessToken !== 'string' ||
-      typeof parsed.refreshToken !== 'string' ||
-      typeof parsed.expiresAt !== 'number'
-    ) return null;
-    return parsed as TraktTokens;
-  } catch {
-    return null;
-  }
-}
-
-function saveTokens(data: { access_token?: string; refresh_token?: string; expires_in?: number }): TraktTokens {
-  if (!data.access_token || !data.refresh_token || typeof data.expires_in !== 'number') {
-    throw new Error('Trakt returned an incomplete token response. Please connect again.');
-  }
-  const tokens: TraktTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
-  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
-  return tokens;
-}
-
 export function hasTraktConnection(): boolean {
-  return loadTokens() !== null;
+  return localStorage.getItem(CONNECTED_STORAGE_KEY) === 'true';
 }
 
-export function disconnectTrakt(): void {
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
-  sessionStorage.removeItem(STATE_STORAGE_KEY);
-  sessionStorage.removeItem(VERIFIER_STORAGE_KEY);
+async function requestTraktBackend(action: string, payload: Record<string, unknown> = {}): Promise<TraktBackendResult> {
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) {
+    throw new Error('Create or sign in to a Stream Command account to enable secure Trakt sync across devices.');
+  }
+  const idToken = await user.getIdToken();
+  const response = await fetch('/api/trakt', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + idToken,
+    },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  let body: TraktBackendResult = {};
+  try { body = await response.json() as TraktBackendResult; } catch {}
+  if (!response.ok) throw new Error(body.error || ('Trakt request failed (' + response.status + ').'));
+  return body;
+}
+
+export async function checkTraktConnection(): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous || !isTraktConfigured()) {
+    localStorage.removeItem(CONNECTED_STORAGE_KEY);
+    return false;
+  }
+  try {
+    const result = await requestTraktBackend('status');
+    const connected = result.connected === true;
+    if (connected) localStorage.setItem(CONNECTED_STORAGE_KEY, 'true');
+    else localStorage.removeItem(CONNECTED_STORAGE_KEY);
+    return connected;
+  } catch {
+    // Preserve the last known UI state during transient network errors; a sync still revalidates server-side.
+    return hasTraktConnection();
+  }
 }
 
 function getExcludedTraktTitleIds(): Set<string> {
@@ -137,6 +141,10 @@ export async function beginTraktAuthorization(): Promise<void> {
   if (!clientId) {
     throw new Error('Trakt is not configured yet. The public Trakt Client ID must be added to the deployment settings first.');
   }
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) {
+    throw new Error('Create or sign in to a Stream Command account first so Trakt can sync securely across devices.');
+  }
 
   const verifier = randomBase64Url(48);
   const state = randomBase64Url(24);
@@ -171,6 +179,19 @@ async function responseError(response: Response): Promise<Error> {
   return new Error(detail || ('Trakt request failed (' + response.status + ').'));
 }
 
+function normalizeResult(result: TraktBackendResult): TraktSyncResult {
+  const seen = new Set<string>();
+  const excluded = getExcludedTraktTitleIds();
+  const items = (Array.isArray(result.items) ? result.items : []).filter(item => {
+    if (!item || typeof item.id !== 'string' || !item.title) return false;
+    const key = item.id.toLowerCase();
+    if (excluded.has(item.id) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { items, total: items.length };
+}
+
 export async function finishTraktOAuthCallback(): Promise<TraktSyncResult> {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
@@ -192,152 +213,24 @@ export async function finishTraktOAuthCallback(): Promise<TraktSyncResult> {
   }
   if (!verifier) throw new Error('The Trakt sign-in session expired. Please connect again.');
 
-  const clientId = getClientId();
-  if (!clientId) throw new Error('Trakt is not configured yet. Add the public Trakt Client ID to the deployment settings.');
-
-  const response = await fetch(API_BASE + '/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      code,
-      client_id: clientId,
-      redirect_uri: getRedirectUri(),
-      grant_type: 'authorization_code',
-      code_verifier: verifier,
-    }),
+  const result = await requestTraktBackend('exchange', {
+    code,
+    codeVerifier: verifier,
+    redirectUri: getRedirectUri(),
   });
-  if (!response.ok) throw await responseError(response);
-
-  saveTokens(await response.json());
-  return syncTraktWatchlist();
-}
-
-async function performTokenRefresh(): Promise<TraktTokens> {
-  const current = loadTokens();
-  if (!current?.refreshToken) throw new Error('The Trakt session expired. Please connect Trakt again.');
-
-  const response = await fetch(API_BASE + '/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      refresh_token: current.refreshToken,
-      client_id: getClientId(),
-      redirect_uri: getRedirectUri(),
-      grant_type: 'refresh_token',
-    }),
-  });
-  if (!response.ok) {
-    if (response.status === 400 || response.status === 401) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      throw new Error('Trakt needs you to reconnect. Please use Connect Trakt again.');
-    }
-    throw await responseError(response);
-  }
-  return saveTokens(await response.json());
-}
-
-let refreshPromise: Promise<TraktTokens> | null = null;
-
-function refreshTokens(): Promise<TraktTokens> {
-  if (refreshPromise) return refreshPromise;
-  const pending = performTokenRefresh();
-  refreshPromise = pending;
-  return pending.finally(() => {
-    if (refreshPromise === pending) refreshPromise = null;
-  });
-}
-async function getUsableAccessToken(): Promise<string> {
-  if (!isTraktConfigured()) throw new Error('Trakt is not configured yet.');
-  const tokens = loadTokens();
-  if (!tokens) throw new Error('Connect Trakt before syncing its watchlist.');
-  if (tokens.expiresAt <= Date.now() + 60_000) {
-    return (await refreshTokens()).accessToken;
-  }
-  return tokens.accessToken;
-}
-
-async function traktGet(url: string, alreadyRetried = false): Promise<TraktResponse> {
-  const accessToken = await getUsableAccessToken();
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: 'Bearer ' + accessToken,
-      'trakt-api-version': '2',
-      'trakt-api-key': getClientId(),
-    },
-  });
-
-  if (response.status === 401 && !alreadyRetried) {
-    await refreshTokens();
-    return traktGet(url, true);
-  }
-  if (!response.ok) throw await responseError(response);
-  return { data: await response.json() as unknown, headers: response.headers };
-}
-
-function mapWatchlistEntry(entry: unknown, kind: 'movies' | 'shows'): TraktWatchlistTitle | null {
-  if (!entry || typeof entry !== 'object') return null;
-  const row = entry as Record<string, unknown>;
-  const media = (row[kind === 'movies' ? 'movie' : 'show'] || row) as Record<string, unknown>;
-  const title = String(media.title || media.name || '').trim();
-  if (!title) return null;
-
-  const ids = (media.ids && typeof media.ids === 'object') ? media.ids as Record<string, unknown> : {};
-  const primaryId = ids.trakt ?? ids.slug ?? ids.tmdb ?? (String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + String(media.year || 'unknown'));
-  return {
-    id: 'trakt-' + (kind === 'movies' ? 'movie-' : 'show-') + String(primaryId),
-    title,
-    type: kind === 'movies' ? 'Movie' : 'Series',
-    provider: 'Trakt',
-    accent: DEFAULT_ACCENT,
-    source: 'trakt',
-  };
-}
-
-async function fetchWatchlistKind(kind: 'movies' | 'shows'): Promise<TraktWatchlistTitle[]> {
-  const items: TraktWatchlistTitle[] = [];
-  let page = 1;
-  let hasMorePages = true;
-
-  while (page <= MAX_PAGES && hasMorePages) {
-    const url = new URL(API_BASE + '/sync/watchlist/' + kind);
-    url.searchParams.set('page', String(page));
-    url.searchParams.set('limit', String(PAGE_LIMIT));
-    url.searchParams.set('extended', 'full');
-
-    const response = await traktGet(url.toString());
-    const rows = Array.isArray(response.data) ? response.data : [];
-    for (const row of rows) {
-      const mapped = mapWatchlistEntry(row, kind);
-      if (mapped) items.push(mapped);
-    }
-
-    const header = response.headers.get('X-Pagination-Page-Count');
-    const parsedPageCount = header ? Number(header) : NaN;
-    hasMorePages = Number.isFinite(parsedPageCount) && parsedPageCount > 0
-      ? page < parsedPageCount
-      : rows.length === PAGE_LIMIT;
-    page += 1;
-  }
-
-  if (hasMorePages) {
-    throw new Error('This Trakt watchlist is larger than one safe sync pass can process. Please narrow it and try again.');
-  }
-  return items;
+  localStorage.setItem(CONNECTED_STORAGE_KEY, 'true');
+  return normalizeResult(result);
 }
 
 export async function syncTraktWatchlist(): Promise<TraktSyncResult> {
-  const [movies, shows] = await Promise.all([
-    fetchWatchlistKind('movies'),
-    fetchWatchlistKind('shows'),
-  ]);
-  const seen = new Set<string>();
-  const excluded = getExcludedTraktTitleIds();
-  const items = [...movies, ...shows].filter(item => {
-    const key = item.id.toLowerCase();
-    if (excluded.has(item.id) || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return { items, total: items.length };
+  const result = await requestTraktBackend('sync');
+  localStorage.setItem(CONNECTED_STORAGE_KEY, 'true');
+  return normalizeResult(result);
+}
+
+export async function disconnectTrakt(): Promise<void> {
+  await requestTraktBackend('disconnect');
+  localStorage.removeItem(CONNECTED_STORAGE_KEY);
+  sessionStorage.removeItem(STATE_STORAGE_KEY);
+  sessionStorage.removeItem(VERIFIER_STORAGE_KEY);
 }
