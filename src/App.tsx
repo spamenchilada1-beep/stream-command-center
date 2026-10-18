@@ -277,6 +277,8 @@ function App() {
   const [accountForm, setAccountForm] = useState({ email: '', password: '' });
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
   const [profileRestored, setProfileRestored] = useState(false);
+  const [profileSyncStatus, setProfileSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
+  const profileWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [importNonce, setImportNonce] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [showAddTitle, setShowAddTitle] = useState(false);
@@ -448,14 +450,29 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!authReady || !profileRestored || !auth.currentUser || auth.currentUser.isAnonymous) return;
-    const profileRef = doc(db, 'users', auth.currentUser.uid);
-    setDoc(profileRef, {
-      email: auth.currentUser.email || accountEmail,
+    const user = auth.currentUser;
+    if (!authReady || !profileRestored || !user || user.isAnonymous) return;
+
+    const profileRef = doc(db, 'users', user.uid);
+    const profileUpdate = {
+      email: user.email || accountEmail,
       connectedProviders: connected,
       watchlist,
       updatedAt: serverTimestamp(),
-    }, { merge: true }).catch(() => undefined);
+    };
+
+    setProfileSyncStatus('syncing');
+    profileWriteQueueRef.current = profileWriteQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await setDoc(profileRef, profileUpdate, { merge: true });
+        setProfileSyncStatus('saved');
+      })
+      .catch(error => {
+        console.error('Stream Command profile sync failed', error);
+        setProfileSyncStatus('error');
+        setAccountMessage('Your latest changes could not be saved to your account. Check your connection and try again.');
+      });
   }, [connected, watchlist, authReady, profileRestored, accountEmail]);
 
   useEffect(() => {
@@ -936,9 +953,10 @@ function App() {
       </div>
       {showAccount && <Modal title={accountMode === 'signed-in' ? 'Your Stream Command account' : 'Save your streaming setup'} onClose={() => { setShowAccount(false); setAccountMessage(''); }}>
         {accountMode === 'signed-in' ? <>
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">Signed in</p><p className="mt-1 font-medium">{accountEmail}</p><p className="mt-2 text-sm leading-6 text-white/45">Your services and watchlist sync to your account. The app can keep you signed in on this device.</p></div>
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">Signed in</p><p className="mt-1 font-medium">{accountEmail}</p><p className="mt-2 text-sm leading-6 text-white/45">Your services and watchlist sync to your account. The app can keep you signed in on this device.</p><p role="status" className={`mt-3 text-xs ${profileSyncStatus === 'error' ? 'text-rose-300' : profileSyncStatus === 'saved' ? 'text-emerald-300' : 'text-white/35'}`}>{profileSyncStatus === 'syncing' ? 'Saving your setup…' : profileSyncStatus === 'saved' ? 'Your latest changes are saved to your account.' : profileSyncStatus === 'error' ? 'Account sync needs attention.' : 'Account sync not started yet.'}</p></div>
           {trialEndsAt && <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">Premium trial</p><p className="mt-1 font-medium">72 hours</p><p className="mt-2 text-xs text-white/40">Trial window ends {new Date(trialEndsAt).toLocaleString()}.</p></div>}
           <p className="mt-4 text-xs text-white/30">Subscription billing is not enabled yet. This account layer is preparing the trial → subscription flow.</p>
+          {accountMessage && <p role="alert" className="mt-3 text-sm text-rose-300">{accountMessage}</p>}
         </> : <>
           <p className="mb-4 text-sm leading-6 text-white/45">Create an account once and keep your services and watchlist with you. If you are currently using anonymous mode, we upgrade that same Firebase identity so the TV pairing foundation stays intact.</p>
           <div className="space-y-3">
