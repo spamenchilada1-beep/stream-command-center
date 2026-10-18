@@ -6,7 +6,7 @@ import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updat
 import { auth, db } from './firebase';
 import { getAvailability, type AvailabilityResult } from './availability';
 import { createImportNonce, isWatchlistImportMessage, mergeImportedWatchlist, normalizeImportedItems } from './watchlistImporter';
-import { beginTraktAuthorization, clearTraktExclusions, disconnectTrakt, excludeTraktTitle, finishTraktOAuthCallback, hasTraktConnection, hasTraktExclusions, isTraktConfigured, isTraktOAuthCallback, syncTraktWatchlist } from './trakt';
+import { beginTraktAuthorization, checkTraktConnection, clearTraktExclusions, disconnectTrakt, excludeTraktTitle, finishTraktOAuthCallback, hasTraktConnection, hasTraktExclusions, isTraktConfigured, isTraktOAuthCallback, syncTraktWatchlist } from './trakt';
 
 type Provider = {
   id: string;
@@ -330,6 +330,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     const handleTraktStartup = async () => {
+      if (!authReady || !profileRestored) return;
       const isCallback = isTraktOAuthCallback();
       if (isCallback) {
         setActiveTab('watchlist');
@@ -351,9 +352,12 @@ function App() {
         return;
       }
 
-      if (!isTraktConfigured() || !hasTraktConnection()) return;
-      setTraktConnected(true);
+      if (!isTraktConfigured()) return;
       try {
+        const serverConnected = await checkTraktConnection();
+        if (cancelled) return;
+        setTraktConnected(serverConnected);
+        if (!serverConnected) return;
         setTraktBusy(true);
         const result = await syncTraktWatchlist();
         if (cancelled) return;
@@ -367,7 +371,7 @@ function App() {
     };
     void handleTraktStartup();
     return () => { cancelled = true; };
-  }, []);
+  }, [authReady, profileRestored]);
 
   useEffect(() => {
     if (!ENABLE_TEST_WATCHLIST_IMPORT) return;
@@ -631,6 +635,11 @@ function App() {
 
   const handleTraktConnectOrSync = async () => {
     if (traktBusy) return;
+    if (!auth.currentUser || auth.currentUser.isAnonymous) {
+      setTraktMessage('Create or sign in to a Stream Command account first so Trakt can sync securely across devices.');
+      setShowAccount(true);
+      return;
+    }
     if (!isTraktConfigured()) {
       setTraktMessage('Trakt is not configured yet. Register an API app, then add VITE_TRAKT_CLIENT_ID and VITE_TRAKT_REDIRECT_URI to the deployment settings.');
       return;
@@ -655,10 +664,18 @@ function App() {
     }
   };
 
-  const handleTraktDisconnect = () => {
-    disconnectTrakt();
-    setTraktConnected(false);
-    setTraktMessage('Trakt disconnected. Previously imported titles remain in your Stream Command watchlist.');
+  const handleTraktDisconnect = async () => {
+    if (traktBusy) return;
+    setTraktBusy(true);
+    try {
+      await disconnectTrakt();
+      setTraktConnected(false);
+      setTraktMessage('Trakt disconnected from your Stream Command account. Previously imported titles remain in your watchlist.');
+    } catch (error) {
+      setTraktMessage(error instanceof Error ? error.message : 'Could not disconnect Trakt. Please try again.');
+    } finally {
+      setTraktBusy(false);
+    }
   };
 
   const removeWatchlistTitle = (title: SavedTitle) => {
