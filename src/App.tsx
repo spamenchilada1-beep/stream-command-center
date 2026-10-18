@@ -192,6 +192,28 @@ function launchNativeTvUrl(uri: string): void {
   window.location.assign(uri);
 }
 
+function availabilityLinkScore(
+  platform: TvPlatform,
+  provider: string,
+  item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null; webUrl: string | null },
+): number {
+  let score = item.webUrl ? 1 : 0;
+  if (getNativeTvUrl(platform, provider, item, item.webUrl)) score += 100;
+
+  const platformUrl = platform === 'samsung' ? item.androidTvUrl : null;
+  if (platformUrl && !platformUrl.toLowerCase().includes('available for paid plans')) score += 100;
+
+  if (normalizeProviderName(provider) === 'primevideo' && item.webUrl) {
+    try {
+      const url = new URL(item.webUrl);
+      if (url.hostname === 'app.primevideo.com' && (url.pathname === '/detail' || url.pathname === '/watch')) score += 50;
+    } catch {
+      // Keep the ordinary web fallback score for malformed URLs.
+    }
+  }
+  return score;
+}
+
 function resolveTvRoute(platform: TvPlatform, provider: string, webUrl: string | null = null, nativeUrl: string | null = null): TvRoute {
   const routeType = tvPlatforms.find(item => item.id === platform)?.routeType || 'fallback';
   if (routeType === 'deep-link') {
@@ -793,13 +815,17 @@ function App() {
     const activeSession = sessionOverride || pairingSession; const platform = (activeSession?.platform || tvPlatform) as TvPlatform;
     const result = await getAvailability(title.title);
     const sources = result.availability || [];
+    const sortByLaunchability = (items: typeof sources) => [...items].sort(
+      (a, b) => availabilityLinkScore(platform, b.providerName, b) - availabilityLinkScore(platform, a.providerName, a),
+    );
+    const connectedSources = sources.filter(item => {
+      if (!item.webUrl) return false;
+      const catalogProvider = providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(item.providerName));
+      return !!catalogProvider && connected.includes(catalogProvider.id);
+    });
     const preferred = title.source === 'trakt'
-      ? sources.find(item => {
-          if (!item.webUrl) return false;
-          const catalogProvider = providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(item.providerName));
-          return !!catalogProvider && connected.includes(catalogProvider.id);
-        }) || sources.find(item => !!item.webUrl) || sources[0]
-      : sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
+      ? sortByLaunchability(connectedSources)[0] || sortByLaunchability(sources.filter(item => !!item.webUrl))[0] || sortByLaunchability(sources)[0]
+      : sortByLaunchability(sources.filter(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider)))[0];
     const matchedCatalogProvider = preferred
       ? providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(preferred.providerName))
       : undefined;
