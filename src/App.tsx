@@ -140,7 +140,14 @@ const providerWebFallbacks: Record<string, string> = {
 };
 
 function normalizeProviderName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const aliases: Record<string, string> = {
+    amazonprimevideo: 'primevideo',
+    hbomax: 'max',
+    disney: 'disneyplus',
+    therokuchannel: 'rokuchannel',
+  };
+  return aliases[normalized] || normalized;
 }
 
 function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }, webUrl: string | null = null): string | null {
@@ -793,7 +800,12 @@ function App() {
           return !!catalogProvider && connected.includes(catalogProvider.id);
         }) || sources.find(item => !!item.webUrl) || sources[0]
       : sources.find(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider));
-    const providerName = title.source === 'trakt' ? (preferred?.providerName || 'No matching streaming service found') : title.provider;
+    const matchedCatalogProvider = preferred
+      ? providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(preferred.providerName))
+      : undefined;
+    const providerName = title.source === 'trakt'
+      ? (matchedCatalogProvider?.name || preferred?.providerName || 'No matching streaming service found')
+      : title.provider;
     const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
     const targetUrl = platform === 'samsung'
       ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : preferred?.webUrl || null)
