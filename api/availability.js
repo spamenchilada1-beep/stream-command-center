@@ -9,6 +9,21 @@ function normalizeProviderName(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+function matchesTitleCandidate(candidate, requested) {
+  const candidateName = normalizeProviderName(candidate?.name);
+  const requestedName = normalizeProviderName(requested?.title);
+  if (!candidateName || !requestedName) return false;
+
+  const year = requested?.year ? String(requested.year) : '';
+  const nameMatches = candidateName === requestedName || (year && candidateName === requestedName + year);
+  if (!nameMatches) return false;
+
+  if (requested?.imdbId && candidate?.imdb_id && String(candidate.imdb_id) !== String(requested.imdbId)) return false;
+  if (requested?.tmdbId && candidate?.tmdb_id && String(candidate.tmdb_id) !== String(requested.tmdbId)) return false;
+  if (requested?.year && candidate?.year && Number(candidate.year) !== Number(requested.year)) return false;
+  return true;
+}
+
 function buildPeacockNativeLinks(webUrl) {
   if (!webUrl) return { androidTvUrl: null, tvosUrl: null };
   try {
@@ -101,7 +116,7 @@ export default async function handler(req, res) {
                   if (watchmodeSearchResponse.ok) {
                     const watchmodeSearchData = await watchmodeSearchResponse.json();
                     const watchmodeResults = Array.isArray(watchmodeSearchData.title_results) ? watchmodeSearchData.title_results : [];
-                    const watchmodeExact = watchmodeResults.find(item => String(item.name).toLowerCase() === title.toLowerCase()) || watchmodeResults[0];
+                    const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, { title: exact.title, year: exact.firstAirYear, imdbId: exact.imdbId, tmdbId: exact.tmdbId }));
                     if (watchmodeExact?.id) {
                       const watchmodeSourcesUrl = new URL(`https://api.watchmode.com/v1/title/${watchmodeExact.id}/sources/`);
                       watchmodeSourcesUrl.searchParams.set('regions', region);
@@ -164,7 +179,7 @@ export default async function handler(req, res) {
 
     const searchData = await searchResponse.json();
     const results = Array.isArray(searchData.title_results) ? searchData.title_results : [];
-    const exact = results.find(item => String(item.name).toLowerCase() === title.toLowerCase()) || results[0];
+    const exact = results.find(item => matchesTitleCandidate(item, { title }));
 
     if (!exact?.id) return json(res, 404, { error: 'title_not_found', title });
 
