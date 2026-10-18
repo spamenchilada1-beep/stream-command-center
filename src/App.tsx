@@ -59,14 +59,14 @@ function detectTvPlatform(): TvPlatform {
   return 'browser';
 }
 
-const tvPlatforms: { id: TvPlatform; name: string; phase: string; routeType: TvCommand['routeType'] }[] = [
-  { id: 'google-tv', name: 'Google TV', phase: 'Phase 1', routeType: 'deep-link' },
-  { id: 'fire-tv', name: 'Fire TV', phase: 'Phase 1', routeType: 'deep-link' },
-  { id: 'roku', name: 'Roku', phase: 'Phase 2', routeType: 'native-app' },
-  { id: 'apple-tv', name: 'Apple TV', phase: 'Phase 2', routeType: 'native-app' },
-  { id: 'samsung', name: 'Samsung TV', phase: 'Phase 2', routeType: 'native-app' },
-  { id: 'lg', name: 'LG TV', phase: 'Phase 2', routeType: 'native-app' },
-  { id: 'browser', name: 'Browser / TV web', phase: 'Now', routeType: 'fallback' },
+const tvPlatforms: { id: TvPlatform; name: string; support: string; routeType: TvCommand['routeType'] }[] = [
+  { id: 'google-tv', name: 'Google TV', support: 'Direct link when available', routeType: 'deep-link' },
+  { id: 'fire-tv', name: 'Fire TV', support: 'Native launch testing; not yet general release', routeType: 'deep-link' },
+  { id: 'roku', name: 'Roku', support: 'Direct-link path present; testing needed', routeType: 'native-app' },
+  { id: 'apple-tv', name: 'Apple TV', support: 'Direct-link path present; testing needed', routeType: 'native-app' },
+  { id: 'samsung', name: 'Samsung TV', support: 'Native launch testing; not yet general release', routeType: 'native-app' },
+  { id: 'lg', name: 'LG TV', support: 'Web fallback; native launch not implemented', routeType: 'native-app' },
+  { id: 'browser', name: 'Browser / TV web', support: 'Browser fallback', routeType: 'fallback' },
 ];
 
 const providers: Provider[] = [
@@ -1061,10 +1061,10 @@ function App() {
               <button onClick={async () => { setReceiverMode(true); await startTvPairing(selectedTitle, tvPlatform); }} className="rounded-2xl border border-cyan-300/25 bg-cyan-300/10 p-4 text-left hover:bg-cyan-300/15"><p className="font-medium">This screen is the TV</p><p className="mt-1 text-xs leading-5 text-white/45">Turn this screen into the live receiver and show a QR code.</p></button>
               <button onClick={() => setReceiverMode(false)} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:bg-white/[0.06]"><p className="font-medium">I’m on my phone</p><p className="mt-1 text-xs leading-5 text-white/45">Pair another TV from this device.</p></button>
             </div>
-            <p className="mt-5 text-sm leading-6 text-white/45">Google TV and Fire TV are our first direct-routing targets. Other platforms are prepared for native adapters.</p>
+            <p className="mt-5 text-sm leading-6 text-white/45">Direct app launch depends on the device, provider, and title-specific link. When a direct link is unavailable, Stream Command falls back to the provider's website.</p>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {tvPlatforms.map(platform => <button key={platform.id} onClick={() => { if (receiverMode) { setTvPlatform(platform.id); startTvPairing(selectedTitle, platform.id).then(() => setShowTv(true)); } else { startTvPairing(selectedTitle, platform.id); } }} className={`rounded-2xl border p-4 text-left transition ${tvPlatform === platform.id ? 'border-cyan-300/40 bg-cyan-300/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
-                <p className="font-medium">{platform.name}</p><p className="mt-1 text-xs text-white/35">{platform.phase} • {platform.routeType === 'deep-link' ? 'Deep-link ready' : platform.routeType === 'native-app' ? 'Native adapter planned' : 'Web fallback'}</p>
+                <p className="font-medium">{platform.name}</p><p className="mt-1 text-xs text-white/35">{platform.support}</p>
               </button>)}
             </div>
           </> : pairingStatus === 'phone-ready' ? <>
