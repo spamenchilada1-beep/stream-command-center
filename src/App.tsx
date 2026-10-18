@@ -143,11 +143,8 @@ function normalizeProviderName(value: string): string {
   const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, '');
   const aliases: Record<string, string> = {
     amazonprimevideo: 'primevideo',
-    amazonprime: 'primevideo',
     hbomax: 'max',
     disney: 'disneyplus',
-    paramount: 'paramountplus',
-    appletvplus: 'appletvplus',
     therokuchannel: 'rokuchannel',
   };
   return aliases[normalized] || normalized;
