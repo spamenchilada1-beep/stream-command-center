@@ -18,9 +18,10 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-async function readJson(res) {
+async function readJson(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
   const chunks = [];
-  for await (const chunk of res) chunks.push(chunk);
+  for await (const chunk of req) chunks.push(chunk);
   const raw = Buffer.concat(chunks).toString('utf8');
   return raw ? JSON.parse(raw) : {};
 }
@@ -214,7 +215,9 @@ async function refreshTokens(idToken, uid, tokens) {
     }
     throw new Error('Trakt token refresh failed (' + response.status + ').');
   }
-  return saveTokens(idToken, uid, await response.json());
+  const refreshed = await saveTokens(idToken, uid, await response.json());
+  Object.assign(tokens, refreshed);
+  return tokens;
 }
 
 async function getTokens(idToken, uid) {
@@ -283,10 +286,8 @@ async function fetchWatchlistKind(kind, idToken, uid, tokens) {
 
 async function syncWatchlist(idToken, uid) {
   const tokens = await getTokens(idToken, uid);
-  const [movies, shows] = await Promise.all([
-    fetchWatchlistKind('movies', idToken, uid, tokens),
-    fetchWatchlistKind('shows', idToken, uid, tokens),
-  ]);
+  const movies = await fetchWatchlistKind('movies', idToken, uid, tokens);
+  const shows = await fetchWatchlistKind('shows', idToken, uid, tokens);
   const seen = new Set();
   const items = [...movies, ...shows].filter(item => {
     const key = item.id.toLowerCase();
@@ -300,7 +301,8 @@ async function syncWatchlist(idToken, uid) {
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Allow', 'POST, OPTIONS');
-    return res.status(204).end();
+    res.statusCode = 204;
+    return res.end();
   }
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST, OPTIONS');
