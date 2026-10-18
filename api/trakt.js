@@ -75,7 +75,11 @@ function verifyJwtSignature(parts, header, claims, jwk) {
       typeof claims.iat !== 'number' || claims.iat > now + 300) {
     throw Object.assign(new Error('Your sign-in session is invalid or expired. Please sign in again.'), { status: 401 });
   }
-  if (claims.firebase?.sign_in_provider === 'anonymous') {
+  const identities = claims.firebase?.identities || {};
+  const hasLinkedIdentity = Object.entries(identities).some(([provider, values]) =>
+    provider !== 'anonymous' && Array.isArray(values) && values.length > 0
+  );
+  if (claims.firebase?.sign_in_provider === 'anonymous' && !hasLinkedIdentity) {
     throw Object.assign(new Error('Create or sign in to a Stream Command account to enable secure Trakt sync across devices.'), { status: 403 });
   }
   return { uid: claims.sub, idToken: parts.join('.') };
