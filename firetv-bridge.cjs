@@ -50,7 +50,8 @@ function sleep(ms) {
 
 async function launchPeacockTitle(title) {
   const component = fireTvApps.peacock;
-  await runAdb(['-s', FIRE_TV, 'shell', 'am', 'force-stop', component]);
+  const packageName = component.split('/')[0];
+  await runAdb(['-s', FIRE_TV, 'shell', 'am', 'force-stop', packageName]);
   await runAdb(['-s', FIRE_TV, 'shell', 'am', 'start', '-n', component]);
   await sleep(3000);
 
