@@ -722,6 +722,8 @@ function App() {
         try {
           const credential = EmailAuthProvider.credential(email, password);
           await linkWithCredential(currentUser, credential);
+          setAccountMode('signed-in');
+          setAccountEmail(email);
           setAccountMessage('Account created. Your saved services and watchlist are now tied to this account.');
           setAccountForm({ email: '', password: '' });
           return;
@@ -729,7 +731,9 @@ function App() {
           if (error?.code !== 'auth/email-already-in-use') throw error;
         }
       }
-      await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      setAccountMode('signed-in');
+      setAccountEmail(credential.user.email || email);
       setAccountMessage('Signed in. Your account data is now available on this device.');
       setAccountForm({ email: '', password: '' });
     } catch (error: any) {
