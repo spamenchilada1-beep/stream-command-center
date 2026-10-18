@@ -917,7 +917,13 @@ function App() {
     if (!receiverMode || !command?.launchUri || !command.sentAt) return;
     if (lastAutoLaunchCommand.current === command.sentAt) return;
     lastAutoLaunchCommand.current = command.sentAt;
-    if (command.platform === 'fire-tv' || command.platform === 'samsung') return;
+    if (command.platform === 'samsung') return;
+    if (command.platform === 'fire-tv') {
+      // The Fire TV receiver may be running directly in Silk. Open the resolved route there
+      // instead of silently doing nothing; the paired native bridge can still handle app launches.
+      launchNativeTvUrl(command.launchUri);
+      return;
+    }
     if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
   }, [receiverMode, pairingSession?.command]);
 
