@@ -162,7 +162,7 @@ function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: 
       const url = new URL(webUrl);
       if (url.hostname === 'app.primevideo.com' && url.pathname === '/detail') {
         url.pathname = '/watch';
-        return 'amzn://avod/watch' + url.search;
+        return url.origin + url.pathname + url.search;
       }
     } catch {
       return null;
