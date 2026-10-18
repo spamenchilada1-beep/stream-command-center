@@ -181,7 +181,14 @@ async function handleCommand(payload) {
 
 function startBridgeServer() {
   const server = http.createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', 'https://stream-command-center-three.vercel.app');
+    const requestOrigin = req.headers.origin;
+    if (
+      requestOrigin === 'https://stream.athenawaypoints.com' ||
+      requestOrigin === 'https://stream-command-center-three.vercel.app'
+    ) {
+      res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+      res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
@@ -225,7 +232,7 @@ function startBridgeServer() {
 
 function launchBridgeBrowser() {
   const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-  const url = 'https://stream-command-center-three.vercel.app/?bridge=1';
+  const url = 'https://stream.athenawaypoints.com/?bridge=1';
   execFile(chrome, ['--app=' + url], { windowsHide: true }, error => {
     if (error) console.error('[BRIDGE] Could not open relay browser:', error.message);
     else console.log('[BRIDGE] relay browser opened');
