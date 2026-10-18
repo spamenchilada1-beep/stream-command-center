@@ -1,3 +1,4 @@
+importScripts('tubi-scan.js');
 const SCC_ORIGIN = 'https://stream-command-center-three.vercel.app';
 const SESSION_PREFIX = 'import-session:';
 
@@ -91,8 +92,12 @@ const PROVIDER_ADAPTERS = {
   },
   tubi: {
     matches: url => url.startsWith('https://www.tubitv.com/') || url.startsWith('https://tubitv.com/'),
-    scan: nonceProviderScan('Tubi'),
+    scan: requestTubiScan,
   },
+
+  // Tubi uses a provider-specific page renderer. The test harness injects a
+  // short-lived reader at scan time, matching the proven MediaShelf pattern
+  // instead of depending on a persistent content-script listener.
   crunchyroll: {
     matches: url => url.startsWith('https://www.crunchyroll.com/'),
     scan: nonceProviderScan('Crunchyroll'),
@@ -179,6 +184,30 @@ const PROVIDER_ADAPTERS = {
   },
 };
 
+async function requestTubiScan(tabId, nonce) {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: scanTubiInPage,
+  });
+
+  const payload = result?.result;
+  if (!payload || !Array.isArray(payload.items)) {
+    throw new Error('Tubi executeScript returned no scan payload.');
+  }
+
+  const session = await getSession(nonce);
+  if (!session?.sccTabId) throw new Error('Tubi scan session has no SCC tab.');
+
+  await chrome.tabs.sendMessage(session.sccTabId, {
+    source: 'stream-command-extension',
+    type: 'scc:watchlist-import',
+    nonce,
+    items: payload.items,
+    diagnostics: payload.diagnostics,
+  });
+
+  return { ok: true, accepted: true, count: payload.items.length };
+}
 function nonceProviderScan(providerName) {
   return (tabId, nonce) => requestProviderReaderScan(tabId, nonce, providerName);
 }
@@ -196,7 +225,7 @@ const SAVED_PATH_PATTERN = /(?:^|\/)(?:my-stuff|my-list|watchlist|watch-list|fav
 const HISTORY_PATH_PATTERN = /(?:^|\/)account\/history(?:\/|$)/i;
 const PROVIDER_SCAN_TARGETS = {
   netflix: 'https://www.netflix.com/browse/my-list',
-  tubi: 'https://tubitv.com/account/history',
+  tubi: 'https://tubitv.com/my-stuff',
 };
 
 function getProviderTabPriority(url, providerId) {
@@ -425,9 +454,17 @@ async function sendToProviderTabs(nonce, sccTabId) {
     title: candidate.tab.title || '',
   }));
 
-  for (const candidate of preparedCandidates) {
+  // SCC currently renders the last provider diagnostic it receives. Keep Tubi
+  // last in this testing harness so its result is not hidden by Pluto.
+  const diagnosticOrder = [...preparedCandidates].sort((a, b) => {
+    if (a.providerId === 'tubi' && b.providerId !== 'tubi') return 1;
+    if (b.providerId === 'tubi' && a.providerId !== 'tubi') return -1;
+    return 0;
+  });
+
+  for (const candidate of diagnosticOrder) {
     const tab = candidate.tab;
-    const adapter = getProviderAdapter(tab.url);
+    const adapter = candidate.adapter;
 
     try {
       await updateSession(nonce, { providerTabId: tab.id });
@@ -435,11 +472,30 @@ async function sendToProviderTabs(nonce, sccTabId) {
       await adapter.scan(tab.id, nonce);
       scanCount += 1;
     } catch (error) {
+      const scanErrorText = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       scanErrors.push({
         tabId: tab.id,
         url: tab.url,
-        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        error: scanErrorText,
       });
+      if (candidate.providerId === 'tubi') {
+        await chrome.tabs.sendMessage(sccTabId, {
+          source: 'stream-command-extension',
+          type: 'scc:watchlist-import',
+          nonce,
+          items: [],
+          diagnostics: {
+            provider: `Tubi SCAN ERROR — ${scanErrorText}`,
+            url: tab.url,
+            title: tab.title || '',
+            readyState: 'unknown',
+            visibilityState: 'unknown',
+            selectorCounts: {},
+            watchLinkCount: 0,
+            ariaLabelCount: 0,
+          },
+        }).catch(() => {});
+      }
       if (candidate.temporary) {
         await chrome.tabs.remove(tab.id).catch(() => {});
       }
@@ -457,7 +513,7 @@ async function sendToProviderTabs(nonce, sccTabId) {
   };
 }
 
-async function handleImportStart(message, sender, sendResponse) {
+function handleImportStart(message, sender, sendResponse) {
   if (message?.type !== 'scc:import-start' || typeof message.nonce !== 'string' || message.nonce.length < 16) {
     sendResponse({ ok: false, reason: 'unsupported-message' });
     return;

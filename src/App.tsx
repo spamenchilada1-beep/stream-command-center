@@ -221,6 +221,7 @@ const starterTitles: SavedTitle[] = [
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
 const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const IMPORT_SESSION_TIMEOUT_MS = 90 * 1000;
+const ENABLE_TEST_WATCHLIST_IMPORT = import.meta.env.DEV || new URLSearchParams(window.location.search).get('sccTestImporter') === '1';
 const SCC_IMPORT_EXTENSION_ID = 'fhcihfhfhdcnknkikepklmgpmcenallmm';
 
 type ChromeRuntimeBridge = {
@@ -277,6 +278,11 @@ function App() {
   const [profileRestored, setProfileRestored] = useState(false);
   const [importNonce, setImportNonce] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
+  const [showAddTitle, setShowAddTitle] = useState(false);
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualTitleType, setManualTitleType] = useState<'Movie' | 'Series'>('Series');
+  const [manualTitleProvider, setManualTitleProvider] = useState('Netflix');
+  const [manualTitleError, setManualTitleError] = useState('');
   const importNonceRef = useRef<string | null>(null);
   const importAckTimerRef = useRef<number | null>(null);
   const lastAutoLaunchCommand = useRef<number | null>(null);
@@ -286,6 +292,8 @@ function App() {
   useEffect(() => { localStorage.setItem('stream-watchlist', JSON.stringify(watchlist)); }, [watchlist]);
 
   useEffect(() => {
+    if (!ENABLE_TEST_WATCHLIST_IMPORT) return;
+
     const handleImportAck = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data;
@@ -796,7 +804,7 @@ function App() {
 
           {activeTab === 'watchlist' && <section>
             {tvConnectedNotice && <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span><div><p className="text-sm font-semibold text-emerald-200">TV connected</p><p className="text-xs text-white/40">Choose a title below to send it to your TV.</p></div></div><button onClick={() => setTvConnectedNotice(false)} className="rounded-full p-1.5 text-white/30 hover:bg-white/5 hover:text-white"><X size={16} /></button></div>}
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><button onClick={async () => {
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => { setManualTitle(''); setManualTitleError(''); setShowAddTitle(true); }} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">Add title</button>{ENABLE_TEST_WATCHLIST_IMPORT && <button onClick={async () => {
               setImportMessage('');
               const nonce = createImportNonce();
               importNonceRef.current = nonce;
@@ -813,7 +821,7 @@ function App() {
               importAckTimerRef.current = window.setTimeout(() => {
                 if (importNonceRef.current === nonce) setImportMessage('Importer diagnostic: no extension bridge acknowledgement was received.');
               }, 3000);
-            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import watchlists</button></div>{importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
+            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} />
           </section>}
         </main>
 
@@ -833,6 +841,51 @@ function App() {
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-white/35">New accounts receive the planned 72-hour premium trial window. Payment collection will be added after the core product flow is validated.</div>
           {accountMessage && <p className="mt-4 text-sm text-cyan-200">{accountMessage}</p>}
         </>}
+      </Modal>}
+
+      {showAddTitle && <Modal title="Add a title to your watchlist" onClose={() => { setShowAddTitle(false); setManualTitleError(''); }}>
+        <form onSubmit={event => {
+          event.preventDefault();
+          const titleText = manualTitle.trim();
+          if (!titleText) return;
+          const alreadySaved = watchlist.some(item => item.title.trim().toLowerCase() === titleText.toLowerCase() && item.provider === manualTitleProvider);
+          if (alreadySaved) { setManualTitleError(titleText + ' is already on your list for ' + manualTitleProvider + '.'); return; }
+          const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'title';
+          const newItem: SavedTitle = {
+            id: 'manual-' + slug(manualTitleProvider) + '-' + slug(titleText),
+            title: titleText,
+            type: manualTitleType,
+            provider: manualTitleProvider,
+            accent: 'from-cyan-500/30 to-indigo-950',
+          };
+          setWatchlist(current => [newItem, ...current]);
+          setManualTitle('');
+          setManualTitleError('');
+          setShowAddTitle(false);
+        }} className="space-y-4">
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-[0.15em] text-white/45">Title</label>
+            <input autoFocus required value={manualTitle} onChange={event => { setManualTitle(event.target.value); if (manualTitleError) setManualTitleError(''); }} placeholder="Movie or series name" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.15em] text-white/45">Type</label>
+              <select value={manualTitleType} onChange={event => setManualTitleType(event.target.value as 'Movie' | 'Series')} className="w-full rounded-2xl border border-white/10 bg-[#111219] px-3 py-3 text-sm outline-none">
+                <option value="Series">Series</option>
+                <option value="Movie">Movie</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.15em] text-white/45">Service</label>
+              <select value={manualTitleProvider} onChange={event => setManualTitleProvider(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-[#111219] px-3 py-3 text-sm outline-none">
+                {providers.filter(provider => !provider.host).map(provider => <option key={provider.id} value={provider.name}>{provider.name}</option>)}
+              </select>
+            </div>
+          </div>
+          {manualTitleError && <p className="text-sm text-amber-200">{manualTitleError}</p>}
+          <button type="submit" className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-black">Add to watchlist</button>
+        </form>
+        <p className="mt-4 text-xs leading-5 text-white/35">Manual entries work without a browser extension. Automatic sync with streaming-account watchlists will use supported provider integrations.</p>
       </Modal>}
 
       {showConnect && <Modal title="Connect your services" onClose={() => { setShowConnect(false); setConnectionMessage(''); }}><p className="mb-4 text-sm text-white/45">Choose a service to start its supported connection flow. Provider account authentication is being wired through individual adapters.</p>{connectionMessage && <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-3 text-xs leading-5 text-cyan-100/80">{connectionMessage}</div>}<div className="grid max-h-[60vh] gap-2 overflow-y-auto sm:grid-cols-2">{providers.map(provider => { const active = connected.includes(provider.id); return <button key={provider.id} onClick={() => connectProvider(provider.id)} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${active ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03]'}`}><span>{provider.name}</span>{active ? <Check size={16} className="text-emerald-300" /> : <Plus size={16} className="text-white/35" />}</button>; })}</div></Modal>}

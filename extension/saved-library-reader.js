@@ -41,6 +41,20 @@ const CARD_SELECTORS = [
   '[data-testid] img[alt]',
 ];
 
+// Tubi's current My Stuff markup is better served by its known tile/poster
+// selectors than by the generic cross-provider selectors above. This mirrors
+// the current MediaShelf clipper implementation used as our reference test.
+const PROVIDER_CARD_SELECTORS = {
+  Tubi: [
+    '[class*="tile"] img[alt]:not([alt=""])',
+    'a[href*="/tv-shows/"] img[alt], a[href*="/series/"] img[alt], a[href*="/movies/"] img[alt]',
+  ],
+};
+
+function getCardSelectors(provider) {
+  return PROVIDER_CARD_SELECTORS[provider] || CARD_SELECTORS;
+}
+
 const NAV_OR_ACTION = /^(home|search|my stuff|watchlist|watch list|my watchlist|my list|saved|favorites?|movies|shows|series|tv|live|sports|settings|account|play|add|remove|more|details|info|watch now|continue watching|sign in|log in)$/i;
 
 function cleanText(value) {
@@ -81,22 +95,11 @@ async function clickSavedControl(config) {
   }
 
   if (config.provider === 'Tubi') {
-    if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i, /^watchlist$/i, /^saved$/i])) return true;
+    if (await clickMatching([/^my\s*stuff$/i, /^my\s*list$/i, /^watchlist$/i, /^saved$/i])) return true;
     if (await clickMatching([/^account\s*settings$/i])) {
       if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
     }
-    const profile = getControls().find(node => {
-      const label = getLabel(node);
-      return /profile\s*options|^profile$|^account$/i.test(label) || /\bperson\s*\d+\b/i.test(label);
-    });
-    if (profile) {
-      profile.click();
-      await new Promise(resolve => setTimeout(resolve, 500));
-      if (await clickMatching([/^account\s*settings$/i])) {
-        if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
-      }
-      if (await clickMatching([/^history\s*&\s*my\s*list$/i, /^my\s*list$/i])) return true;
-    }
+    if (await clickMatching([/^history\s*&\s*my\s*list$/i])) return true;
     return false;
   }
 
@@ -105,6 +108,11 @@ async function clickSavedControl(config) {
 
 function findSavedRoot(config) {
   const candidates = [...document.querySelectorAll('main section, main [role="region"], section, [role="region"]')];
+
+  if (config.provider === 'Tubi' && /\/my-stuff(?:\/|$)/i.test(location.pathname)) {
+    return document.querySelector('main') || document.body;
+  }
+
   const priorityPatterns = config.provider === 'Pluto TV'
     ? [/\bwatch\s+list\b/i, /\bwatchlist\b/i, /\bsaved\b/i]
     : config.provider === 'Tubi'
@@ -153,7 +161,8 @@ function findSavedRoot(config) {
 }
 
 function extractItems(root, provider) {
-  const elements = root.querySelectorAll(CARD_SELECTORS.join(','));
+  const selectors = getCardSelectors(provider);
+  const elements = root.querySelectorAll(selectors.join(','));
   const items = [];
   const seen = new Set();
 
