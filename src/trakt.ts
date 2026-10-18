@@ -22,6 +22,12 @@ type TraktBackendResult = {
 };
 
 const AUTH_BASE = 'https://auth.trakt.tv';
+const LEGACY_TOKEN_STORAGE_KEY = 'stream-trakt-tokens-v1';
+try {
+  if (typeof localStorage !== 'undefined') localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+} catch {
+  // Storage can be unavailable in restricted browser contexts.
+}
 const CONNECTED_STORAGE_KEY = 'stream-trakt-connected-v1';
 const EXCLUDED_STORAGE_KEY = 'stream-trakt-excluded-title-ids-v1';
 const STATE_STORAGE_KEY = 'stream-trakt-oauth-state';
