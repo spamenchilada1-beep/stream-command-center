@@ -137,7 +137,10 @@ async function pollFirestoreBridgeCommands() {
     let existingCommands = 0;
     for (const item of docs) {
       const sentAt = Number(item.data?.command?.sentAt || 0);
-      if (sentAt) existingCommands += 1;
+      if (sentAt) {
+        existingCommands += 1;
+        lastBridgeCommands.set(item.platform, sentAt);
+      }
     }
     bridgePollerPrimed = true;
     console.log('[BRIDGE FIRESTORE] Connected; ignored ' + existingCommands + ' pre-existing command(s) and waiting for new ones.');
