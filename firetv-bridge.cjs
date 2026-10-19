@@ -6,6 +6,191 @@ const SAMSUNG_TV = '192.168.0.95';
 const SAMSUNG_PORT = 8001;
 const PORT = 8787;
 
+const FIREBASE_API_KEY = 'AIzaSyDOImXoew63ecuSvbJ6LXQwTzCBVYZBooQ';
+const FIREBASE_PROJECT_ID = 'stream-command-center-c5445';
+const FIRESTORE_DOCUMENTS_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/pairingSessions`;
+const BRIDGE_POLL_INTERVAL_MS = 5000;
+const BRIDGE_PLATFORMS = [
+  { platform: 'fire-tv', documentId: 'bridge_fire_tv' },
+  { platform: 'samsung', documentId: 'bridge_samsung' },
+];
+
+let firebaseSession = null;
+let bridgePollerStarted = false;
+let bridgePollerPrimed = false;
+let lastBridgePollError = '';
+
+function decodeFirestoreValue(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (Object.prototype.hasOwnProperty.call(value, 'stringValue')) return value.stringValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'integerValue')) return Number(value.integerValue);
+  if (Object.prototype.hasOwnProperty.call(value, 'doubleValue')) return Number(value.doubleValue);
+  if (Object.prototype.hasOwnProperty.call(value, 'booleanValue')) return value.booleanValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'nullValue')) return null;
+  if (Object.prototype.hasOwnProperty.call(value, 'timestampValue')) return value.timestampValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'referenceValue')) return value.referenceValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'bytesValue')) return value.bytesValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'geoPointValue')) return value.geoPointValue;
+  if (value.arrayValue) return (value.arrayValue.values || []).map(decodeFirestoreValue);
+  if (value.mapValue) return decodeFirestoreFields(value.mapValue.fields || {});
+  return null;
+}
+
+function decodeFirestoreFields(fields) {
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, decodeFirestoreValue(value)]));
+}
+
+function decodeFirestoreDocument(document) {
+  return decodeFirestoreFields(document?.fields || {});
+}
+
+async function responseJson(response) {
+  return response.json().catch(() => ({}));
+}
+
+async function createAnonymousFirebaseSession() {
+  const response = await fetch(
+    'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + FIREBASE_API_KEY,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnSecureToken: true }),
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  const body = await responseJson(response);
+  if (!response.ok || !body.idToken || !body.refreshToken) {
+    throw new Error('Firebase anonymous authentication failed (' + response.status + '): ' + (body.error?.message || 'unknown error'));
+  }
+  firebaseSession = {
+    idToken: body.idToken,
+    refreshToken: body.refreshToken,
+    expiresAt: Date.now() + Number(body.expiresIn || 3600) * 1000,
+  };
+  console.log('[BRIDGE FIRESTORE] Authenticated; listening directly without a browser relay.');
+  return firebaseSession.idToken;
+}
+
+async function refreshAnonymousFirebaseSession() {
+  if (!firebaseSession?.refreshToken) return createAnonymousFirebaseSession();
+  const response = await fetch(
+    'https://securetoken.googleapis.com/v1/token?key=' + FIREBASE_API_KEY,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: firebaseSession.refreshToken,
+      }),
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  const body = await responseJson(response);
+  if (!response.ok || !body.id_token) {
+    firebaseSession = null;
+    return createAnonymousFirebaseSession();
+  }
+  firebaseSession = {
+    idToken: body.id_token,
+    refreshToken: body.refresh_token || firebaseSession.refreshToken,
+    expiresAt: Date.now() + Number(body.expires_in || 3600) * 1000,
+  };
+  return firebaseSession.idToken;
+}
+
+async function getFirebaseIdToken(forceRefresh = false) {
+  if (!firebaseSession) return createAnonymousFirebaseSession();
+  if (forceRefresh || firebaseSession.expiresAt - Date.now() < 120000) {
+    return refreshAnonymousFirebaseSession();
+  }
+  return firebaseSession.idToken;
+}
+
+async function readBridgeDocument(documentId) {
+  let token = await getFirebaseIdToken();
+  let response = await fetch(FIRESTORE_DOCUMENTS_URL + '/' + documentId, {
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (response.status === 401) {
+    token = await getFirebaseIdToken(true);
+    response = await fetch(FIRESTORE_DOCUMENTS_URL + '/' + documentId, {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+  }
+  if (response.status === 404) return null;
+  const body = await responseJson(response);
+  if (!response.ok) {
+    throw new Error('Firestore read failed (' + response.status + '): ' + (body.error?.message || 'unknown error'));
+  }
+  return decodeFirestoreDocument(body);
+}
+
+async function pollFirestoreBridgeCommands() {
+  const docs = await Promise.all(BRIDGE_PLATFORMS.map(async item => ({
+    ...item,
+    data: await readBridgeDocument(item.documentId),
+  })));
+
+  if (!bridgePollerPrimed) {
+    let existingCommands = 0;
+    for (const item of docs) {
+      const sentAt = Number(item.data?.command?.sentAt || 0);
+      if (sentAt) existingCommands += 1;
+    }
+    bridgePollerPrimed = true;
+    console.log('[BRIDGE FIRESTORE] Connected; ignored ' + existingCommands + ' pre-existing command(s) and waiting for new ones.');
+    return;
+  }
+
+  for (const item of docs) {
+    const data = item.data;
+    const command = data?.command;
+    const sentAt = Number(command?.sentAt || 0);
+    if (data?.status !== 'paired' || !sentAt) continue;
+    if (lastBridgeCommands.get(item.platform) === sentAt) continue;
+
+    lastBridgeCommands.set(item.platform, sentAt);
+    const commandAge = Date.now() - sentAt;
+    if (commandAge < 0 || commandAge > PAIRING_SESSION_TTL_MS) {
+      console.log('[BRIDGE FIRESTORE] Ignored expired/future ' + item.platform + ' command.');
+      continue;
+    }
+
+    try {
+      console.log('[BRIDGE FIRESTORE] New command: ' + command.title + ' / ' + command.provider + ' (' + item.platform + ')');
+      const result = await handleCommand({ platform: item.platform, command });
+      console.log('[BRIDGE FIRESTORE] DELIVERED ' + command.title + ': ' + result);
+    } catch (error) {
+      console.error('[BRIDGE FIRESTORE] DELIVERY FAILED ' + (command.title || 'unknown title') + ': ' + error.message);
+    }
+  }
+}
+
+function startFirestoreBridgeListener() {
+  if (bridgePollerStarted) return;
+  bridgePollerStarted = true;
+  const poll = async () => {
+    try {
+      await pollFirestoreBridgeCommands();
+      if (lastBridgePollError) {
+        console.log('[BRIDGE FIRESTORE] Connection recovered.');
+        lastBridgePollError = '';
+      }
+    } catch (error) {
+      const message = error?.message || String(error);
+      if (message !== lastBridgePollError) {
+        console.error('[BRIDGE FIRESTORE] Listener unavailable: ' + message);
+        lastBridgePollError = message;
+      }
+    } finally {
+      setTimeout(poll, BRIDGE_POLL_INTERVAL_MS);
+    }
+  };
+  void poll();
+}
+
 const samsungApps = {
   netflix: '3201907018807',
   hulu: '3201601007625',
@@ -30,6 +215,7 @@ const fireTvApps = {
 };
 
 const seenCommands = new Map();
+const lastBridgeCommands = new Map();
 
 function normalize(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -229,20 +415,11 @@ function startBridgeServer() {
   });
 }
 
-function launchBridgeBrowser() {
-  const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-  const url = 'https://stream.athenawaypoints.com/?bridge=1';
-  execFile(chrome, ['--app=' + url], { windowsHide: true }, error => {
-    if (error) console.error('[BRIDGE] Could not open relay browser:', error.message);
-    else console.log('[BRIDGE] relay browser opened');
-  });
-}
-
 async function main() {
   startBridgeServer();
   await runAdb(['connect', FIRE_TV]).catch(error => console.error('[BRIDGE] Fire TV ADB connect:', error.message));
   console.log('[BRIDGE] Fire TV + Samsung native handoff ready');
-  if (process.env.BRIDGE_SKIP_BROWSER !== '1') launchBridgeBrowser();
+  startFirestoreBridgeListener();
 }
 
 main().catch(error => {
