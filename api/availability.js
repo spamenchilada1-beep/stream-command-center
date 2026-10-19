@@ -180,8 +180,11 @@ export default async function handler(req, res) {
               };
             });
             if (availability.length) {
+              // Movie of the Night is the primary availability source here. Its
+              // title-specific options stay authoritative; Watchmode is optional
+              // enrichment for native app links and must never veto a valid list or
+              // replace its provider set with a conflicting one.
               let enrichedAvailability = availability;
-              let sourcesCrossChecked = false;
               if (apiKey) {
                 try {
                   const watchmodeSearchUrl = new URL('https://api.watchmode.com/v1/search/');
@@ -210,40 +213,32 @@ export default async function handler(req, res) {
                       if (watchmodeSourcesResponse.ok) {
                         const watchmodeSourcesPayload = await watchmodeSourcesResponse.json();
                         const watchmodeSources = Array.isArray(watchmodeSourcesPayload) ? watchmodeSourcesPayload : [];
-
-                        // Use Watchmode's source list for the exact cross-checked title.
-                        // Intersecting provider names with Movie of the Night hid valid
-                        // options whenever catalogs disagreed (for example Yellowstone).
-                        // Title identity is cross-checked above; provider availability is
-                        // taken from the independent, title-specific source list.
-                        enrichedAvailability = watchmodeSources.map(source => ({
-                          providerId: source.source_id ?? source.id ?? source.name ?? 'watchmode',
-                          providerName: source.name || 'Unknown service',
-                          type: source.type || 'sub',
-                          region: source.region || region,
-                          webUrl: typeof source.web_url === 'string' ? source.web_url : null,
-                          iosUrl: typeof source.ios_url === 'string' ? source.ios_url : null,
-                          androidUrl: typeof source.android_url === 'string' ? source.android_url : null,
-                          tvosUrl: typeof source.tvos_url === 'string' ? source.tvos_url : null,
-                          androidTvUrl: typeof source.android_tv_url === 'string' ? source.android_tv_url : null,
-                          rokuUrl: typeof source.roku_url === 'string' ? source.roku_url : null,
-                          price: source.price ?? null,
-                          format: source.format || null,
-                        }));
-                        sourcesCrossChecked = true;
+                        const nativeByProvider = new Map(
+                          watchmodeSources.map(source => [normalizeProviderName(source.name), source])
+                        );
+                        enrichedAvailability = availability.map(item => {
+                          const native = nativeByProvider.get(normalizeProviderName(item.providerName));
+                          if (!native) return item;
+                          return {
+                            ...item,
+                            iosUrl: typeof native.ios_url === 'string' ? native.ios_url : item.iosUrl,
+                            androidUrl: typeof native.android_url === 'string' ? native.android_url : item.androidUrl,
+                            tvosUrl: typeof native.tvos_url === 'string' ? native.tvos_url : item.tvosUrl,
+                            androidTvUrl: typeof native.android_tv_url === 'string' ? native.android_tv_url : item.androidTvUrl,
+                            rokuUrl: typeof native.roku_url === 'string' ? native.roku_url : item.rokuUrl,
+                          };
+                        });
                       }
                     }
                   }
                 } catch {
-                  // Do not show one catalog's results when independent verification fails.
+                  // Availability is already populated by Movie of the Night;
+                  // optional native-link enrichment failing does not block the list.
                 }
               }
 
-              if (!sourcesCrossChecked) {
-                return json(res, 502, { error: 'availability_sources_unverified', title });
-              }
               return json(res, 200, {
-                source: 'watchmode',
+                source: 'motn',
                 region,
                 title: {
                   id: exact.id,
