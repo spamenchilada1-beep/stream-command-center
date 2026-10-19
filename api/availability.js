@@ -59,7 +59,7 @@ export default async function handler(req, res) {
   const region = String(req.query?.region || 'US').toUpperCase();
   const catalogId = String(req.query?.catalogId || '').trim();
   const requestedYearValue = String(req.query?.year || '').trim();
-  const requestedYear = /^\\d{4}$/.test(requestedYearValue) ? Number(requestedYearValue) : null;
+  const requestedYear = /^\d{4}$/.test(requestedYearValue) ? Number(requestedYearValue) : null;
   const requestedImdbId = String(req.query?.imdbId || '').trim() || null;
   const requestedTmdbId = String(req.query?.tmdbId || '').trim() || null;
   if (!title) return json(res, 400, { error: 'title_required' });
