@@ -850,14 +850,18 @@ function App() {
     const matchedCatalogProvider = preferred
       ? providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(preferred.providerName))
       : undefined;
+    // If title-specific availability has no usable result, still open the known provider
+    // website on the TV instead of writing a command with a null launchUri.
     const providerName = title.source === 'trakt'
-      ? (matchedCatalogProvider?.name || preferred?.providerName || 'No matching streaming service found')
+      ? (matchedCatalogProvider?.name || preferred?.providerName || title.provider)
       : title.provider;
-    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
+    const providerFallbackUrl = providerWebFallbacks[providerName] || null;
+    const webUrl = preferred?.webUrl || providerFallbackUrl;
+    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, webUrl) : null;
     const targetUrl = platform === 'samsung'
-      ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : preferred?.webUrl || null)
-      : preferred?.webUrl || null;
-    const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
+      ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : webUrl)
+      : webUrl;
+    const route = resolveTvRoute(platform, providerName, webUrl, nativeUrl);
     const command: TvCommand = {
       action: 'open-title',
       platform,
