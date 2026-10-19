@@ -9,6 +9,7 @@ const PORT = 8787;
 const FIREBASE_API_KEY = 'AIzaSyDOImXoew63ecuSvbJ6LXQwTzCBVYZBooQ';
 const FIREBASE_PROJECT_ID = 'stream-command-center-c5445';
 const FIRESTORE_DOCUMENTS_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/pairingSessions`;
+const FIRESTORE_BATCH_GET_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:batchGet`;
 const BRIDGE_POLL_INTERVAL_MS = 5000;
 const BRIDGE_PLATFORMS = [
   { platform: 'fire-tv', documentId: 'bridge_fire_tv' },
@@ -127,11 +128,67 @@ async function readBridgeDocument(documentId) {
   return decodeFirestoreDocument(body);
 }
 
-async function pollFirestoreBridgeCommands() {
-  const docs = await Promise.all(BRIDGE_PLATFORMS.map(async item => ({
+
+async function readBridgeDocuments() {
+  const documentNames = BRIDGE_PLATFORMS.map(item => FIRESTORE_DOCUMENTS_URL + '/' + item.documentId);
+  const sendBatchGet = async token => fetch(FIRESTORE_BATCH_GET_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ documents: documentNames }),
+    signal: AbortSignal.timeout(20000),
+  });
+
+  let token = await getFirebaseIdToken();
+  let response = await sendBatchGet(token);
+  if (response.status === 401) {
+    token = await getFirebaseIdToken(true);
+    response = await sendBatchGet(token);
+  }
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    let message = responseText;
+    try {
+      message = JSON.parse(responseText).error?.message || message;
+    } catch {
+      // Keep the unstructured service response.
+    }
+    throw new Error('Firestore batch read failed (' + response.status + '): ' + message);
+  }
+
+  const responses = [];
+  try {
+    const parsed = JSON.parse(responseText);
+    responses.push(...(Array.isArray(parsed) ? parsed : [parsed]));
+  } catch {
+    for (const line of responseText.split(/\r?\n/).filter(Boolean)) {
+      responses.push(JSON.parse(line));
+    }
+  }
+
+  const byDocumentId = new Map();
+  for (const item of responses) {
+    if (item.found?.name) {
+      byDocumentId.set(item.found.name.split('/').pop(), decodeFirestoreDocument(item.found));
+    } else if (item.missing) {
+      byDocumentId.set(item.missing.split('/').pop(), null);
+    } else if (item.error) {
+      throw new Error('Firestore batch read item failed: ' + (item.error.message || JSON.stringify(item.error)));
+    }
+  }
+
+  return BRIDGE_PLATFORMS.map(item => ({
     ...item,
-    data: await readBridgeDocument(item.documentId),
-  })));
+    data: byDocumentId.get(item.documentId) || null,
+  }));
+}
+
+async function pollFirestoreBridgeCommands() {
+  const docs = await readBridgeDocuments();
 
   if (!bridgePollerPrimed) {
     let existingCommands = 0;
@@ -436,5 +493,6 @@ module.exports = {
   decodeFirestoreValue,
   decodeFirestoreDocument,
   readBridgeDocument,
+  readBridgeDocuments,
   pollFirestoreBridgeCommands,
 };
