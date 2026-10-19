@@ -436,4 +436,5 @@ module.exports = {
   decodeFirestoreValue,
   decodeFirestoreDocument,
   readBridgeDocument,
+  pollFirestoreBridgeCommands,
 };
