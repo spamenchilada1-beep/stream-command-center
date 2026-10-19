@@ -11,6 +11,7 @@ const FIREBASE_PROJECT_ID = 'stream-command-center-c5445';
 const FIRESTORE_DOCUMENTS_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/pairingSessions`;
 const FIRESTORE_BATCH_GET_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:batchGet`;
 const BRIDGE_POLL_INTERVAL_MS = 5000;
+const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const BRIDGE_PLATFORMS = [
   { platform: 'fire-tv', documentId: 'bridge_fire_tv' },
   { platform: 'samsung', documentId: 'bridge_samsung' },
