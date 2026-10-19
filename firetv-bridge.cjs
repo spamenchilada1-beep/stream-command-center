@@ -425,7 +425,15 @@ async function main() {
   startFirestoreBridgeListener();
 }
 
-main().catch(error => {
-  console.error('[BRIDGE] fatal:', error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(error => {
+    console.error('[BRIDGE] fatal:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  decodeFirestoreValue,
+  decodeFirestoreDocument,
+  readBridgeDocument,
+};
