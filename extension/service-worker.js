@@ -1,5 +1,11 @@
 importScripts('tubi-scan.js');
-const SCC_ORIGIN = 'https://stream-command-center-three.vercel.app';
+const SCC_ORIGINS = new Set([
+  'https://stream.athenawaypoints.com',
+  'https://stream-command-center-three.vercel.app',
+]);
+function isSccUrl(value) {
+  try { return SCC_ORIGINS.has(new URL(value).origin); } catch { return false; }
+}
 const SESSION_PREFIX = 'import-session:';
 
 async function setSession(nonce, session) {
@@ -254,11 +260,11 @@ async function findSccTab(preferredTabId) {
   if (preferredTabId) {
     try {
       const tab = await chrome.tabs.get(preferredTabId);
-      if (tab.url?.startsWith(SCC_ORIGIN)) return tab;
+      if (tab.url && isSccUrl(tab.url)) return tab;
     } catch {}
   }
 
-  const tabs = await chrome.tabs.query({ url: [`${SCC_ORIGIN}/*`] });
+  const tabs = await chrome.tabs.query({ url: [...SCC_ORIGINS].map(origin => `${origin}/*`) });
   return tabs.find(tab => tab.active) || tabs[0] || null;
 }
 
@@ -548,7 +554,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
   const senderOrigin = sender.origin || (sender.url ? new URL(sender.url).origin : '');
-  if (senderOrigin !== SCC_ORIGIN) {
+  if (!SCC_ORIGINS.has(senderOrigin)) {
     sendResponse({ ok: false, reason: 'origin-not-allowed' });
     return;
   }
