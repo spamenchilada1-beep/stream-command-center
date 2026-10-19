@@ -934,7 +934,12 @@ function App() {
     setAvailability(null);
     setAvailabilityLoading(true);
     setShowWhereToWatch(true);
-    const result = await getAvailability(title.title);
+    const result = await getAvailability(title.title, {
+      catalogId: title.catalogId,
+      year: title.year,
+      imdbId: title.imdbId,
+      tmdbId: title.tmdbId,
+    });
     setAvailability(result);
     setAvailabilityLoading(false);
   };
