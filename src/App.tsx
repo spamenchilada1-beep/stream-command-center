@@ -1080,8 +1080,20 @@ function App() {
           {availability && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/35">{availability.source}</span>}
         </div>
         {availabilityLoading ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">Checking current availability…</div> : availability && availability.availability.length > 0 ? <div className="space-y-2">
-          {availability.availability.map((item, index) => {
-            const provider = providers.find(entry => entry.name === item.providerName);
+          {[...availability.availability].sort((a, b) => {
+            const isSelected = (providerName: string) => {
+              const match = providers.find(entry =>
+                normalizeProviderName(entry.name) === normalizeProviderName(providerName) ||
+                (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(providerName))
+              );
+              return match ? connected.includes(match.id) : false;
+            };
+            return Number(isSelected(b.providerName)) - Number(isSelected(a.providerName));
+          }).map((item, index) => {
+            const provider = providers.find(entry =>
+              normalizeProviderName(entry.name) === normalizeProviderName(item.providerName) ||
+              (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(item.providerName))
+            );
             const connectedHere = provider ? connected.includes(provider.id) : false;
             const availabilityLabel = item.type === 'free' ? 'Free' : item.type === 'rent' ? 'Rent' : item.type === 'buy' ? 'Buy' : item.type === 'tve' ? 'TV provider login' : 'Subscription';
             return <div key={`${item.providerName}-${item.type}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
