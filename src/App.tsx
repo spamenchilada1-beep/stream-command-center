@@ -945,9 +945,19 @@ function App() {
     lastAutoLaunchCommand.current = command.sentAt;
     if (command.platform === 'samsung') return;
     if (command.platform === 'fire-tv') {
-      // The Fire TV receiver may be running directly in Silk. Open the resolved route there
-      // instead of silently doing nothing; the paired native bridge can still handle app launches.
-      launchNativeTvUrl(command.launchUri);
+      // Silk is a browser, not a reliable Android intent dispatcher. If the resolved route is
+      // an intent URI, open the provider's HTTPS target in Silk instead of sending an unsupported
+      // scheme that can look like a command was delivered but never launch anything.
+      const isIntentUri = command.launchUri.startsWith('intent://');
+      const receiverUrl = isIntentUri && command.targetUrl?.startsWith('https://')
+        ? command.targetUrl
+        : command.launchUri;
+      console.info('[TV RECEIVER] Opening Fire TV route', {
+        title: command.title,
+        routeKind: isIntentUri && receiverUrl !== command.launchUri ? 'https-fallback' : 'resolved-route',
+        urlScheme: receiverUrl.split(':', 1)[0],
+      });
+      launchNativeTvUrl(receiverUrl);
       return;
     }
     if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
