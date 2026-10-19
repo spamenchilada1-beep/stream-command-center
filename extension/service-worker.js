@@ -2,6 +2,7 @@ importScripts('tubi-scan.js');
 const SCC_ORIGINS = new Set([
   'https://stream.athenawaypoints.com',
   'https://stream-command-center-three.vercel.app',
+  'https://stream-command-center-git-fix-strict-availab-d1f6a3-athena-c403.vercel.app',
 ]);
 function isSccUrl(value) {
   try { return SCC_ORIGINS.has(new URL(value).origin); } catch { return false; }
