@@ -248,6 +248,24 @@ const starterTitles: SavedTitle[] = [
   { id: 'fallout', title: 'Fallout', type: 'Series', provider: 'Prime Video', accent: 'from-cyan-500/30 to-indigo-950' },
 ];
 
+const sampleTitleChoices: Array<{ title: string; type: 'Movie' | 'Series'; provider: string }> = [
+  { title: 'Yellowstone', type: 'Series', provider: 'Peacock' },
+  { title: 'The Bear', type: 'Series', provider: 'Hulu' },
+  { title: 'Fallout', type: 'Series', provider: 'Prime Video' },
+  { title: 'MobLand', type: 'Series', provider: 'Paramount+' },
+  { title: 'The Last of Us', type: 'Series', provider: 'Max' },
+  { title: 'Wednesday', type: 'Series', provider: 'Netflix' },
+  { title: 'Stranger Things', type: 'Series', provider: 'Netflix' },
+  { title: 'Reacher', type: 'Series', provider: 'Prime Video' },
+  { title: 'Severance', type: 'Series', provider: 'Apple TV+' },
+  { title: 'Only Murders in the Building', type: 'Series', provider: 'Hulu' },
+  { title: 'Shōgun', type: 'Series', provider: 'Hulu' },
+  { title: 'Dune: Part Two', type: 'Movie', provider: 'Max' },
+  { title: 'Inside Out 2', type: 'Movie', provider: 'Disney+' },
+  { title: 'Top Gun: Maverick', type: 'Movie', provider: 'Paramount+' },
+  { title: 'A Quiet Place: Day One', type: 'Movie', provider: 'Paramount+' },
+];
+
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
 const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const IMPORT_SESSION_TIMEOUT_MS = 90 * 1000;
@@ -1016,7 +1034,20 @@ function App() {
         }} className="space-y-4">
           <div>
             <label className="mb-2 block text-xs uppercase tracking-[0.15em] text-white/45">Title</label>
-            <input autoFocus required value={manualTitle} onChange={event => { setManualTitle(event.target.value); if (manualTitleError) setManualTitleError(''); }} placeholder="Movie or series name" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
+            <input autoFocus required list="scc-title-suggestions" value={manualTitle} onChange={event => {
+              const value = event.target.value;
+              setManualTitle(value);
+              const sample = sampleTitleChoices.find(item => item.title.toLocaleLowerCase() === value.trim().toLocaleLowerCase());
+              if (sample) {
+                setManualTitleType(sample.type);
+                setManualTitleProvider(sample.provider);
+              }
+              if (manualTitleError) setManualTitleError('');
+            }} placeholder="Start typing a movie or series" className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
+            <datalist id="scc-title-suggestions">
+              {sampleTitleChoices.map(item => <option key={item.title} value={item.title} label={`${item.type} • example service: ${item.provider}`} />)}
+            </datalist>
+            <p className="mt-2 text-xs leading-5 text-white/35">Popular sample titles are searchable here. The suggested service is test data, not a verified availability claim; use Where to watch to check current results.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
