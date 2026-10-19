@@ -11,6 +11,37 @@ function normalizeProviderName(value) {
   return String(value || '').toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '');
 }
 
+function applyKnownAvailabilityCorrections(title, year, items, region) {
+  // Verified U.S. rights correction for the original Yellowstone series (2018).
+  // Official Peacock listing: https://www.peacocktv.com/stream-tv/yellowstone
+  // Paramount+ official support says Yellowstone is not available in the U.S.:
+  // https://cbsi.my.salesforce-sites.com/CBSi/articles/en_US/Knowledge/PD-Why-can-t-I-watch-Yellowstone-on-Paramount
+  const titleKey = normalizeProviderName(title).replace(/2018$/, '');
+  const isOriginalYellowstone = region === 'US' &&
+    titleKey === 'yellowstone' &&
+    (year == null || Number(year) === 2018);
+  if (!isOriginalYellowstone) return items;
+
+  const corrected = items.filter(item => normalizeProviderName(item.providerName) !== 'paramountplus');
+  if (!corrected.some(item => normalizeProviderName(item.providerName) === 'peacock')) {
+    corrected.unshift({
+      providerId: 'peacock',
+      providerName: 'Peacock',
+      type: 'sub',
+      region: 'US',
+      webUrl: 'https://www.peacocktv.com/stream-tv/yellowstone',
+      iosUrl: null,
+      androidUrl: null,
+      tvosUrl: null,
+      androidTvUrl: null,
+      rokuUrl: null,
+      price: null,
+      format: null,
+    });
+  }
+  return corrected;
+}
+
 function matchesTitleCandidate(candidate, requested) {
   const candidateName = normalizeProviderName(candidate?.name);
   const requestedName = normalizeProviderName(requested?.title);
@@ -101,7 +132,7 @@ export default async function handler(req, res) {
             const options = Array.isArray(motnShow?.streamingOptions?.[region.toLowerCase()])
               ? motnShow.streamingOptions[region.toLowerCase()]
               : [];
-            const availability = options.map(source => {
+            let availability = options.map(source => {
               const peacockLinks = normalizeProviderName(source.service?.name) === 'peacock'
                 ? buildPeacockNativeLinks(source.link || null)
                 : { androidTvUrl: null, tvosUrl: null };
@@ -120,6 +151,12 @@ export default async function handler(req, res) {
                 format: source.quality || null,
               };
             });
+            availability = applyKnownAvailabilityCorrections(
+              exact.title || title,
+              exact.firstAirYear ?? requestedYear,
+              availability,
+              region,
+            );
             if (availability.length) {
               let enrichedAvailability = availability;
               let sourcesCrossChecked = false;
@@ -156,20 +193,25 @@ export default async function handler(req, res) {
                         // options whenever catalogs disagreed (for example Yellowstone).
                         // Title identity is cross-checked above; provider availability is
                         // taken from the independent, title-specific source list.
-                        enrichedAvailability = watchmodeSources.map(source => ({
-                          providerId: source.source_id ?? source.id ?? source.name ?? 'watchmode',
-                          providerName: source.name || 'Unknown service',
-                          type: source.type || 'sub',
-                          region: source.region || region,
-                          webUrl: typeof source.web_url === 'string' ? source.web_url : null,
-                          iosUrl: typeof source.ios_url === 'string' ? source.ios_url : null,
-                          androidUrl: typeof source.android_url === 'string' ? source.android_url : null,
-                          tvosUrl: typeof source.tvos_url === 'string' ? source.tvos_url : null,
-                          androidTvUrl: typeof source.android_tv_url === 'string' ? source.android_tv_url : null,
-                          rokuUrl: typeof source.roku_url === 'string' ? source.roku_url : null,
-                          price: source.price ?? null,
-                          format: source.format || null,
-                        }));
+                        enrichedAvailability = applyKnownAvailabilityCorrections(
+                          exact.title || title,
+                          exact.firstAirYear ?? requestedYear,
+                          watchmodeSources.map(source => ({
+                            providerId: source.source_id ?? source.id ?? source.name ?? 'watchmode',
+                            providerName: source.name || 'Unknown service',
+                            type: source.type || 'sub',
+                            region: source.region || region,
+                            webUrl: typeof source.web_url === 'string' ? source.web_url : null,
+                            iosUrl: typeof source.ios_url === 'string' ? source.ios_url : null,
+                            androidUrl: typeof source.android_url === 'string' ? source.android_url : null,
+                            tvosUrl: typeof source.tvos_url === 'string' ? source.tvos_url : null,
+                            androidTvUrl: typeof source.android_tv_url === 'string' ? source.android_tv_url : null,
+                            rokuUrl: typeof source.roku_url === 'string' ? source.roku_url : null,
+                            price: source.price ?? null,
+                            format: source.format || null,
+                          })),
+                          region,
+                        );
                         sourcesCrossChecked = true;
                       }
                     }
@@ -180,6 +222,30 @@ export default async function handler(req, res) {
               }
 
               if (!sourcesCrossChecked) {
+                // For the officially verified Yellowstone exception, return the
+                // corrected primary-catalog list instead of an empty error state.
+                const correctedFallback = applyKnownAvailabilityCorrections(
+                  exact.title || title,
+                  exact.firstAirYear ?? requestedYear,
+                  availability,
+                  region,
+                );
+                if (normalizeProviderName(exact.title || title).replace(/2018$/, '') === 'yellowstone' &&
+                    region === 'US' && correctedFallback.some(item => normalizeProviderName(item.providerName) === 'peacock')) {
+                  return json(res, 200, {
+                    source: 'motn',
+                    region,
+                    title: {
+                      id: exact.id,
+                      name: exact.title,
+                      type: exact.showType || 'series',
+                      year: exact.firstAirYear || requestedYear || 2018,
+                      imdbId: exact.imdbId || requestedImdbId,
+                      tmdbId: exact.tmdbId || requestedTmdbId,
+                    },
+                    availability: correctedFallback,
+                  });
+                }
                 return json(res, 502, { error: 'availability_sources_unverified', title });
               }
               if (enrichedAvailability.length === 0) {
