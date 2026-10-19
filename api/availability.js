@@ -71,7 +71,8 @@ export default async function handler(req, res) {
       if (motnSearchResponse.ok) {
         const motnSearchData = await motnSearchResponse.json();
         const motnResults = Array.isArray(motnSearchData) ? motnSearchData : [];
-        const exact = motnResults.find(item => String(item.title).toLowerCase() === title.toLowerCase()) || motnResults[0];
+        const requestedTitleKey = normalizeProviderName(title);
+        const exact = motnResults.find(item => normalizeProviderName(item?.title) === requestedTitleKey);
         if (exact?.id) {
           const motnShowUrl = new URL('https://api.movieofthenight.com/v4/shows/' + exact.id);
           motnShowUrl.searchParams.set('country', region.toLowerCase());
@@ -164,6 +165,8 @@ export default async function handler(req, res) {
         }
       }
     }
+
+    if (!apiKey) return json(res, 404, { error: 'title_not_found', title });
 
     const searchUrl = new URL('https://api.watchmode.com/v1/search/');
     searchUrl.searchParams.set('search_field', 'name');
