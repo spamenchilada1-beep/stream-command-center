@@ -108,6 +108,7 @@ export default async function handler(req, res) {
   const catalogId = String(req.query?.catalogId || '').trim();
   const requestedYearValue = String(req.query?.year || '').trim();
   const requestedYear = /^\d{4}$/.test(requestedYearValue) ? Number(requestedYearValue) : null;
+  const requestedType = normalizeTitleType(req.query?.type);
   const requestedImdbId = String(req.query?.imdbId || '').trim() || null;
   const requestedTmdbId = String(req.query?.tmdbId || '').trim() || null;
   if (!title) return json(res, 400, { error: 'title_required' });
@@ -133,7 +134,8 @@ export default async function handler(req, res) {
           normalizeTitle(item?.title) === requestedTitleKey &&
           (!catalogId || String(item?.id) === catalogId) &&
           (requestedYear == null || item?.firstAirYear == null || Number(item.firstAirYear) === requestedYear) &&
-          (!requestedImdbId || !item?.imdbId || String(item.imdbId) === requestedImdbId) &&
+          (!requestedType || !item?.showType || normalizeTitleType(item.showType) === requestedType) &&
+          (!requestedImdbId || !item?.imdbId || String(item.imdbId).toLowerCase() === requestedImdbId.toLowerCase()) &&
           (!requestedTmdbId || item?.tmdbId == null || (() => {
             const requested = normalizeTmdbIdentity(requestedTmdbId, requestedType);
             const candidate = normalizeTmdbIdentity(item.tmdbId, item.showType);
@@ -188,6 +190,7 @@ export default async function handler(req, res) {
                     const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, {
                       title: exact.title || title,
                       year: exact.firstAirYear ?? requestedYear,
+                      type: exact.showType || requestedType,
                       imdbId: exact.imdbId || requestedImdbId,
                       tmdbId: exact.tmdbId ?? requestedTmdbId,
                     }));
@@ -274,6 +277,7 @@ export default async function handler(req, res) {
     const exact = results.find(item => matchesTitleCandidate(item, {
       title,
       year: requestedYear,
+      type: requestedType,
       imdbId: requestedImdbId,
       tmdbId: requestedTmdbId,
     }));
