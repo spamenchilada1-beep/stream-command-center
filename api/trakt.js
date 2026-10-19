@@ -187,11 +187,11 @@ async function exchangeCode(idToken, uid, body) {
   const response = await fetch(TRAKT_AUTH + '/oauth/token', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
       'User-Agent': 'StreamCommandCenter/1.0 (+https://stream.athenawaypoints.com)',
     },
-    body: JSON.stringify({
+    body: new URLSearchParams({
       code: body.code,
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -211,11 +211,11 @@ async function refreshTokens(idToken, uid, tokens) {
   const response = await fetch(TRAKT_AUTH + '/oauth/token', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
       'User-Agent': 'StreamCommandCenter/1.0 (+https://stream.athenawaypoints.com)',
     },
-    body: JSON.stringify({
+    body: new URLSearchParams({
       refresh_token: tokens.refreshToken,
       client_id: getTraktClientId(),
       redirect_uri: tokens.redirectUri,
