@@ -292,6 +292,7 @@ function App() {
   const [tvPaired, setTvPaired] = useState(false);
   const [pairingStatus, setPairingStatus] = useState<'idle' | 'waiting' | 'phone-ready' | 'paired'>('idle');
   const [pairingError, setPairingError] = useState('');
+  const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingSession, setPairingSession] = useState<any>(null);
   const [tvPlatform, setTvPlatform] = useState<TvPlatform>('browser');
   const [receiverMode, setReceiverMode] = useState(false);
@@ -770,8 +771,18 @@ function App() {
     });
   };
   const confirmPhonePairing = async () => {
-    if (!pairingCode) return;
+    console.info('[TV PAIRING] Confirmation tapped', {
+      hasPairingCode: !!pairingCode,
+      authReady,
+      hasCurrentUser: !!auth.currentUser,
+      status: pairingStatus,
+    });
+    if (!pairingCode) {
+      setPairingError('No pairing code is loaded. Close this screen and reopen pairing from the TV.');
+      return;
+    }
     setPairingError('');
+    setPairingBusy(true);
     try {
       if (!auth.currentUser) await signInAnonymously(auth);
       const user = auth.currentUser;
@@ -824,6 +835,8 @@ function App() {
         PAIRING_CODE_EXPIRED: 'That pairing code expired. Start a fresh TV session.',
       };
       setPairingError(messages[code] || `Pairing failed: ${code}`);
+    } finally {
+      setPairingBusy(false);
     }
   };
 
@@ -1191,7 +1204,7 @@ function App() {
             <p className="mt-5 font-semibold">Pair with {pairingSession?.tvName || 'Living Room TV'}?</p>
             <p className="mt-2 text-sm leading-6 text-white/45">This device found a live TV pairing session. Confirm once to connect it.</p>
             {pairingSession?.title && <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-white/35">TV is waiting for</p><p className="mt-1 font-semibold">{pairingSession.title}</p><p className="text-xs text-white/35">{pairingSession.provider}</p></div>}
-            <button onClick={confirmPhonePairing} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Pair this TV</button>
+            <button type="button" disabled={pairingBusy} aria-busy={pairingBusy} onClick={() => { void confirmPhonePairing(); }} className="mt-5 min-h-12 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-60">{pairingBusy ? 'Connecting…' : 'Pair this TV'}</button>
             {pairingError && <p className="mt-3 text-sm text-rose-200">{pairingError}</p>}
           </> : pairingStatus === 'waiting' ? <>
             <div className="mx-auto rounded-2xl border border-white/15 bg-white/[0.04] p-3"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}&platform=${encodeURIComponent(tvPlatform)}`} size={170} bgColor="transparent" fgColor="#ffffff" includeMargin /></div>
