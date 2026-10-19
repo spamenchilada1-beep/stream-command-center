@@ -130,7 +130,7 @@ async function readBridgeDocument(documentId) {
 
 
 async function readBridgeDocuments() {
-  const documentNames = BRIDGE_PLATFORMS.map(item => FIRESTORE_DOCUMENTS_URL + '/' + item.documentId);
+  const documentNames = BRIDGE_PLATFORMS.map(item => 'projects/' + FIREBASE_PROJECT_ID + '/databases/(default)/documents/pairingSessions/' + item.documentId);
   const sendBatchGet = async token => fetch(FIRESTORE_BATCH_GET_URL, {
     method: 'POST',
     headers: {
