@@ -150,6 +150,14 @@ function normalizeProviderName(value: string): string {
   return aliases[normalized] || normalized;
 }
 
+function isProviderInSelectedServices(providerName: string, selectedProviderIds: string[]): boolean {
+  const match = providers.find(entry =>
+    normalizeProviderName(entry.name) === normalizeProviderName(providerName) ||
+    (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(providerName))
+  );
+  return !!match && selectedProviderIds.includes(match.id);
+}
+
 function getNativeTvUrl(platform: TvPlatform, provider: string, item: { iosUrl: string | null; androidUrl: string | null; tvosUrl: string | null; androidTvUrl: string | null; rokuUrl: string | null }, webUrl: string | null = null): string | null {
   const candidates = platform === 'apple-tv' ? [item.tvosUrl]
     : platform === 'roku' ? [item.rokuUrl]
@@ -288,6 +296,7 @@ function App() {
   const [showWhereToWatch, setShowWhereToWatch] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityResult | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'my-services'>('all');
   const [pairingCode, setPairingCode] = useState('');
   const [tvPaired, setTvPaired] = useState(false);
   const [pairingStatus, setPairingStatus] = useState<'idle' | 'waiting' | 'phone-ready' | 'paired'>('idle');
@@ -587,6 +596,19 @@ function App() {
     );
   }, [search, category]);
 
+  const availabilityInMyServices = useMemo(
+    () => (availability?.availability || []).filter(item => isProviderInSelectedServices(item.providerName, connected)),
+    [availability, connected]
+  );
+  const displayedAvailability = useMemo(() => {
+    const sorted = [...(availability?.availability || [])].sort(
+      (a, b) => Number(isProviderInSelectedServices(b.providerName, connected)) - Number(isProviderInSelectedServices(a.providerName, connected))
+    );
+    return availabilityFilter === 'my-services'
+      ? sorted.filter(item => isProviderInSelectedServices(item.providerName, connected))
+      : sorted;
+  }, [availability, connected, availabilityFilter]);
+
   const connectProvider = (id: string) => {
     const provider = providers.find(item => item.id === id);
     if (!provider) return;
@@ -871,6 +893,7 @@ function App() {
   };
   const openWhereToWatch = async (title: SavedTitle) => {
     setSelectedTitle(title);
+    setAvailabilityFilter('all');
     setAvailability(null);
     setAvailabilityLoading(true);
     setShowWhereToWatch(true);
@@ -1046,17 +1069,16 @@ function App() {
           <p className="text-sm text-white/45">{availability && (availability.source === 'watchmode' || availability.source === 'motn') ? 'Live U.S. availability' : 'Live availability unavailable'}</p>
           {availability && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/35">{availability.source === 'unavailable' ? 'unavailable' : availability.source}</span>}
         </div>
-        {availabilityLoading ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">Checking current availability…</div> : availability && availability.availability.length > 0 ? <div className="space-y-2">
-          {[...availability.availability].sort((a, b) => {
-            const isSelected = (providerName: string) => {
-              const match = providers.find(entry =>
-                normalizeProviderName(entry.name) === normalizeProviderName(providerName) ||
-                (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(providerName))
-              );
-              return match ? connected.includes(match.id) : false;
-            };
-            return Number(isSelected(b.providerName)) - Number(isSelected(a.providerName));
-          }).map((item, index) => {
+        {availabilityLoading ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">Checking current availability…</div> : availability && availability.availability.length > 0 ? <div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" aria-pressed={availabilityFilter === 'all'} onClick={() => setAvailabilityFilter('all')} className={`rounded-full border px-3 py-2 text-xs font-medium transition ${availabilityFilter === 'all' ? 'border-white bg-white text-black' : 'border-white/10 text-white/55 hover:text-white'}`}>All options ({availability.availability.length})</button>
+              <button type="button" aria-pressed={availabilityFilter === 'my-services'} onClick={() => setAvailabilityFilter('my-services')} className={`rounded-full border px-3 py-2 text-xs font-medium transition ${availabilityFilter === 'my-services' ? 'border-white bg-white text-black' : 'border-white/10 text-white/55 hover:text-white'}`}>My services ({availabilityInMyServices.length})</button>
+            </div>
+            <p className="text-xs text-white/35">Your selected services are not subscription-verified.</p>
+          </div>
+          {displayedAvailability.length > 0 ? <div className="space-y-2">
+          {displayedAvailability.map((item, index) => {
             const provider = providers.find(entry =>
               normalizeProviderName(entry.name) === normalizeProviderName(item.providerName) ||
               (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(item.providerName))
@@ -1068,6 +1090,14 @@ function App() {
               <button onClick={() => { if (item.webUrl) { window.open(item.webUrl, '_blank', 'noopener,noreferrer'); setShowWhereToWatch(false); } }} disabled={!item.webUrl} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Watch</button>
             </div>;
           })}
+        </div> : <div className="rounded-2xl border border-dashed border-white/10 p-6">
+            <p className="text-sm text-white/65">None of your selected services appear in these live results.</p>
+            <p className="mt-2 text-xs leading-5 text-white/35">Choose services to personalize this list, or view every available option.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setShowWhereToWatch(false); setShowConnect(true); }} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black">Choose my services</button>
+              <button type="button" onClick={() => setAvailabilityFilter('all')} className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/65 hover:text-white">Show all options</button>
+            </div>
+          </div>}
         </div> : availability?.source === 'unavailable' ? <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">{availability.error === 'availability_source_not_configured' ? 'Live availability is not configured on this deployment. Demo results are disabled to avoid showing the wrong services.' : 'Live availability could not be loaded. Demo results are disabled to avoid showing incorrect services.'}</div> : <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">No current availability was returned by the live catalog for this title.</div>}
       </Modal>}
 
