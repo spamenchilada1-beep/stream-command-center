@@ -891,20 +891,28 @@ function App() {
     setPairingError('');
     try {
       const savedCode = localStorage.getItem('stream-tv-session');
-      const activeCode = savedCode || (pairingStatus === 'paired' && pairingCode ? pairingCode : null);
+      // Prefer the currently paired session in this app over a possibly stale browser-stored code.
+      const activeCode = pairingStatus === 'paired' && pairingCode
+        ? pairingCode
+        : savedCode;
       if (activeCode) {
         const sessionSnap = await getDoc(doc(db, 'pairingSessions', activeCode));
-        if (sessionSnap.exists() && sessionSnap.data().status === 'paired') {
+        if (sessionSnap.exists()) {
           const session = sessionSnap.data();
-          setPairingCode(activeCode);
-          setPairingSession(session);
-          setPairingStatus('paired');
-          setTvPaired(true);
-          setShowTv(true);
-          if (!savedCode) localStorage.setItem('stream-tv-session', activeCode);
-          await sendTitleToPairedTv(title, activeCode, session);
-          console.info('[TV COMMAND] Firebase command written', { platform: session.platform, pairingCode: activeCode, title: title.title });
-          return;
+          const sessionIsPaired = session.status === 'paired';
+          const sessionHasTvOwner = typeof session.tvUserId === 'string' && session.tvUserId.length > 0;
+          const sessionPlatformMatches = !session.platform || session.platform === tvPlatform;
+          if (sessionIsPaired && sessionHasTvOwner && sessionPlatformMatches) {
+            setPairingCode(activeCode);
+            setPairingSession(session);
+            setPairingStatus('paired');
+            setTvPaired(true);
+            setShowTv(true);
+            if (savedCode !== activeCode) localStorage.setItem('stream-tv-session', activeCode);
+            await sendTitleToPairedTv(title, activeCode, session);
+            console.info('[TV COMMAND] Firebase command written', { platform: session.platform, pairingCode: activeCode, title: title.title });
+            return;
+          }
         }
         if (savedCode) localStorage.removeItem('stream-tv-session');
       }
