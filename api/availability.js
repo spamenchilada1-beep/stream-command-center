@@ -57,22 +57,37 @@ export default async function handler(req, res) {
 
   const title = String(req.query?.title || '').trim();
   const region = String(req.query?.region || 'US').toUpperCase();
+  const catalogId = String(req.query?.catalogId || '').trim();
+  const requestedYearValue = String(req.query?.year || '').trim();
+  const requestedYear = /^\\d{4}$/.test(requestedYearValue) ? Number(requestedYearValue) : null;
+  const requestedImdbId = String(req.query?.imdbId || '').trim() || null;
+  const requestedTmdbId = String(req.query?.tmdbId || '').trim() || null;
   if (!title) return json(res, 400, { error: 'title_required' });
 
   try {
     const motnKey = process.env.MOTN_API_KEY;
     if (motnKey) {
-      const motnSearchUrl = new URL('https://api.movieofthenight.com/v4/shows/search/title');
-      motnSearchUrl.searchParams.set('title', title);
+      const motnSearchUrl = catalogId
+        ? new URL('https://api.movieofthenight.com/v4/shows/' + encodeURIComponent(catalogId))
+        : new URL('https://api.movieofthenight.com/v4/shows/search/title');
+      if (!catalogId) motnSearchUrl.searchParams.set('title', title);
       motnSearchUrl.searchParams.set('country', region.toLowerCase());
       const motnSearchResponse = await fetch(motnSearchUrl, {
         headers: { 'X-API-Key': motnKey, Accept: 'application/json' },
       });
       if (motnSearchResponse.ok) {
         const motnSearchData = await motnSearchResponse.json();
-        const motnResults = Array.isArray(motnSearchData) ? motnSearchData : [];
+        const motnResults = Array.isArray(motnSearchData)
+          ? motnSearchData
+          : motnSearchData && typeof motnSearchData === 'object' ? [motnSearchData] : [];
         const requestedTitleKey = normalizeProviderName(title);
-        const exact = motnResults.find(item => normalizeProviderName(item?.title) === requestedTitleKey);
+        const exact = motnResults.find(item =>
+          normalizeProviderName(item?.title) === requestedTitleKey &&
+          (!catalogId || String(item?.id) === catalogId) &&
+          (requestedYear == null || item?.firstAirYear == null || Number(item.firstAirYear) === requestedYear) &&
+          (!requestedImdbId || !item?.imdbId || String(item.imdbId) === requestedImdbId) &&
+          (!requestedTmdbId || item?.tmdbId == null || String(item.tmdbId) === requestedTmdbId)
+        );
         if (exact?.id) {
           const motnShowUrl = new URL('https://api.movieofthenight.com/v4/shows/' + exact.id);
           motnShowUrl.searchParams.set('country', region.toLowerCase());
@@ -117,7 +132,12 @@ export default async function handler(req, res) {
                   if (watchmodeSearchResponse.ok) {
                     const watchmodeSearchData = await watchmodeSearchResponse.json();
                     const watchmodeResults = Array.isArray(watchmodeSearchData.title_results) ? watchmodeSearchData.title_results : [];
-                    const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, { title: exact.title, year: exact.firstAirYear, imdbId: exact.imdbId, tmdbId: exact.tmdbId }));
+                    const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, {
+                       title: exact.title || title,
+                       year: exact.firstAirYear ?? requestedYear,
+                       imdbId: exact.imdbId || requestedImdbId,
+                       tmdbId: exact.tmdbId ?? requestedTmdbId,
+                     }));
                     if (watchmodeExact?.id) {
                       const watchmodeSourcesUrl = new URL(`https://api.watchmode.com/v1/title/${watchmodeExact.id}/sources/`);
                       watchmodeSourcesUrl.searchParams.set('regions', region);
