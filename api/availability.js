@@ -6,7 +6,9 @@ function json(res, status, body) {
 }
 
 function normalizeProviderName(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // Normalize the plus sign as a word so "Paramount+" and "Paramount Plus"
+  // can be compared as the same service across provider catalogs.
+  return String(value || '').toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '');
 }
 
 function matchesTitleCandidate(candidate, requested) {
@@ -120,6 +122,7 @@ export default async function handler(req, res) {
             });
             if (availability.length) {
               let enrichedAvailability = availability;
+              let sourcesCrossChecked = false;
               if (apiKey) {
                 try {
                   const watchmodeSearchUrl = new URL('https://api.watchmode.com/v1/search/');
@@ -133,11 +136,11 @@ export default async function handler(req, res) {
                     const watchmodeSearchData = await watchmodeSearchResponse.json();
                     const watchmodeResults = Array.isArray(watchmodeSearchData.title_results) ? watchmodeSearchData.title_results : [];
                     const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, {
-                       title: exact.title || title,
-                       year: exact.firstAirYear ?? requestedYear,
-                       imdbId: exact.imdbId || requestedImdbId,
-                       tmdbId: exact.tmdbId ?? requestedTmdbId,
-                     }));
+                      title: exact.title || title,
+                      year: exact.firstAirYear ?? requestedYear,
+                      imdbId: exact.imdbId || requestedImdbId,
+                      tmdbId: exact.tmdbId ?? requestedTmdbId,
+                    }));
                     if (watchmodeExact?.id) {
                       const watchmodeSourcesUrl = new URL(`https://api.watchmode.com/v1/title/${watchmodeExact.id}/sources/`);
                       watchmodeSourcesUrl.searchParams.set('regions', region);
@@ -147,24 +150,38 @@ export default async function handler(req, res) {
                       if (watchmodeSourcesResponse.ok) {
                         const watchmodeSources = await watchmodeSourcesResponse.json();
                         const nativeByProvider = new Map((Array.isArray(watchmodeSources) ? watchmodeSources : []).map(source => [normalizeProviderName(source.name), source]));
-                        enrichedAvailability = availability.map(item => {
-                          const native = nativeByProvider.get(normalizeProviderName(item.providerName));
-                          if (!native) return item;
-                          return {
-                            ...item,
-                            iosUrl: typeof native.ios_url === 'string' ? native.ios_url : item.iosUrl,
-                            androidUrl: typeof native.android_url === 'string' ? native.android_url : item.androidUrl,
-                            tvosUrl: typeof native.tvos_url === 'string' ? native.tvos_url : item.tvosUrl,
-                            androidTvUrl: typeof native.android_tv_url === 'string' ? native.android_tv_url : item.androidTvUrl,
-                            rokuUrl: typeof native.roku_url === 'string' ? native.roku_url : item.rokuUrl,
-                          };
-                        });
+
+                        // Availability from the primary catalog is shown only when the
+                        // independent catalog also lists the provider for this exact title.
+                        // Fail closed rather than display unverified services.
+                        enrichedAvailability = availability
+                          .filter(item => nativeByProvider.has(normalizeProviderName(item.providerName)))
+                          .map(item => {
+                            const native = nativeByProvider.get(normalizeProviderName(item.providerName));
+                            return {
+                              ...item,
+                              webUrl: typeof native?.web_url === 'string' ? native.web_url : item.webUrl,
+                              iosUrl: typeof native?.ios_url === 'string' ? native.ios_url : item.iosUrl,
+                              androidUrl: typeof native?.android_url === 'string' ? native.android_url : item.androidUrl,
+                              tvosUrl: typeof native?.tvos_url === 'string' ? native.tvos_url : item.tvosUrl,
+                              androidTvUrl: typeof native?.android_tv_url === 'string' ? native.android_tv_url : item.androidTvUrl,
+                              rokuUrl: typeof native?.roku_url === 'string' ? native.roku_url : item.rokuUrl,
+                            };
+                          });
+                        sourcesCrossChecked = true;
                       }
                     }
                   }
                 } catch {
-                  // MOTN remains the primary source when native-link enrichment is unavailable.
+                  // Do not show one catalog's results when independent verification fails.
                 }
+              }
+
+              if (!sourcesCrossChecked) {
+                return json(res, 502, { error: 'availability_sources_unverified', title });
+              }
+              if (enrichedAvailability.length === 0) {
+                return json(res, 502, { error: 'availability_sources_disagree', title });
               }
 
               return json(res, 200, {
