@@ -264,7 +264,7 @@ const starterTitles: SavedTitle[] = [
 const categories = ['All', 'Subscription', 'Free', 'Specialty', 'Live TV', 'TVE', 'Rental / Purchase', 'Library'];
 const PAIRING_SESSION_TTL_MS = 10 * 60 * 1000;
 const IMPORT_SESSION_TIMEOUT_MS = 90 * 1000;
-const ENABLE_TEST_WATCHLIST_IMPORT = import.meta.env.DEV || new URLSearchParams(window.location.search).get('sccTestImporter') === '1';
+const ENABLE_WATCHLIST_IMPORT = true;
 const SCC_IMPORT_EXTENSION_ID = 'fhcihfhfhdcnknkikepklmgpmcenallmm';
 
 type ChromeRuntimeBridge = {
@@ -434,7 +434,7 @@ function App() {
   }, [authReady, profileRestored]);
 
   useEffect(() => {
-    if (!ENABLE_TEST_WATCHLIST_IMPORT) return;
+    if (!ENABLE_WATCHLIST_IMPORT) return;
 
     const handleImportAck = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -861,7 +861,7 @@ function App() {
     setSelectedTitle(title);
     setPairingCode(code);
     const activeSession = sessionOverride || pairingSession; const platform = (activeSession?.platform || tvPlatform) as TvPlatform;
-    const result = await getAvailability(title.title);
+    const result = await getAvailability(title.title, { catalogId: title.catalogId, year: title.year, imdbId: title.imdbId, tmdbId: title.tmdbId });
     const sources = result.availability || [];
     const sortByLaunchability = (items: typeof sources) => [...items].sort(
       (a, b) => availabilityLinkScore(platform, b.providerName, b) - availabilityLinkScore(platform, a.providerName, a),
@@ -1014,7 +1014,7 @@ function App() {
 
           {activeTab === 'watchlist' && <section>
             {tvConnectedNotice && <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span><div><p className="text-sm font-semibold text-emerald-200">TV connected</p><p className="text-xs text-white/40">Choose a title below to send it to your TV.</p></div></div><button onClick={() => setTvConnectedNotice(false)} className="rounded-full p-1.5 text-white/30 hover:bg-white/5 hover:text-white"><X size={16} /></button></div>}
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => { setManualTitle(''); setManualTitleError(''); setCatalogResults([]); setCatalogSearchError(''); setSelectedCatalogTitle(null); setShowAddTitle(true); }} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">Add title</button>{ENABLE_TEST_WATCHLIST_IMPORT && <button onClick={async () => {
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => { setManualTitle(''); setManualTitleError(''); setCatalogResults([]); setCatalogSearchError(''); setSelectedCatalogTitle(null); setShowAddTitle(true); }} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">Add title</button>{ENABLE_WATCHLIST_IMPORT && <button onClick={async () => {
               setImportMessage('');
               const nonce = createImportNonce();
               importNonceRef.current = nonce;
@@ -1031,7 +1031,7 @@ function App() {
               importAckTimerRef.current = window.setTimeout(() => {
                 if (importNonceRef.current === nonce) setImportMessage('Importer diagnostic: no extension bridge acknowledgement was received.');
               }, 3000);
-            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div><div className="mb-5 flex flex-wrap items-center gap-2"><button onClick={handleTraktConnectOrSync} disabled={traktBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] disabled:opacity-50">{traktBusy ? 'Syncing Trakt...' : traktConnected ? 'Sync Trakt' : 'Connect Trakt'}</button>{traktConnected && <button onClick={handleTraktDisconnect} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Disconnect Trakt</button>}{traktHasHiddenTitles && <button onClick={restoreHiddenTraktTitles} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Restore hidden titles</button>}{traktMessage && <p role="status" className="w-full text-xs text-white/45">{traktMessage}</p>}</div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} />
+            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Import from open services</button>}</div></div><div className="mb-5 flex flex-wrap items-center gap-2"><button onClick={handleTraktConnectOrSync} disabled={traktBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] disabled:opacity-50">{traktBusy ? 'Syncing Trakt...' : traktConnected ? 'Sync Trakt' : 'Connect Trakt'}</button>{traktConnected && <button onClick={handleTraktDisconnect} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Disconnect Trakt</button>}{traktHasHiddenTitles && <button onClick={restoreHiddenTraktTitles} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Restore hidden titles</button>}{traktMessage && <p role="status" className="w-full text-xs text-white/45">{traktMessage}</p>}</div>{ENABLE_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning supported streaming-service tabs in this browser. Sign in to the services you want to import.</div>}{ENABLE_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} />
           </section>}
         </main>
 
