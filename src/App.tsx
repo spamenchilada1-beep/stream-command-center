@@ -23,7 +23,16 @@ type SavedTitle = {
   type: 'Movie' | 'Series';
   provider: string;
   accent: string;
-  source?: 'trakt';
+  source?: 'trakt' | 'catalog';
+};
+
+type CatalogSearchResult = {
+  id: string;
+  title: string;
+  type: 'Movie' | 'Series';
+  year: number | null;
+  imdbId: string | null;
+  tmdbId: string | null;
 };
 
 type TvPlatform = 'google-tv' | 'fire-tv' | 'roku' | 'apple-tv' | 'samsung' | 'lg' | 'browser';
@@ -311,6 +320,12 @@ function App() {
   const [importNonce, setImportNonce] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [showAddTitle, setShowAddTitle] = useState(false);
+  const [showCatalogSearch, setShowCatalogSearch] = useState(false);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogResults, setCatalogResults] = useState<CatalogSearchResult[]>([]);
+  const [catalogSearching, setCatalogSearching] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogMessage, setCatalogMessage] = useState('');
   const [manualTitle, setManualTitle] = useState('');
   const [manualTitleType, setManualTitleType] = useState<'Movie' | 'Series'>('Series');
   const [manualTitleProvider, setManualTitleProvider] = useState('Netflix');
@@ -811,13 +826,13 @@ function App() {
       const catalogProvider = providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(item.providerName));
       return !!catalogProvider && connected.includes(catalogProvider.id);
     });
-    const preferred = title.source === 'trakt'
+    const preferred = title.source === 'trakt' || title.source === 'catalog'
       ? sortByLaunchability(connectedSources)[0] || sortByLaunchability(sources.filter(item => !!item.webUrl))[0] || sortByLaunchability(sources)[0]
       : sortByLaunchability(sources.filter(item => normalizeProviderName(item.providerName) === normalizeProviderName(title.provider)))[0];
     const matchedCatalogProvider = preferred
       ? providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(preferred.providerName))
       : undefined;
-    const providerName = title.source === 'trakt'
+    const providerName = title.source === 'trakt' || title.source === 'catalog'
       ? (matchedCatalogProvider?.name || preferred?.providerName || 'No matching streaming service found')
       : title.provider;
     const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
@@ -877,6 +892,56 @@ function App() {
     const result = await getAvailability(title.title);
     setAvailability(result);
     setAvailabilityLoading(false);
+  };
+
+  const searchCatalog = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = catalogQuery.trim();
+    if (query.length < 2) {
+      setCatalogError('Enter at least two characters to search.');
+      setCatalogResults([]);
+      return;
+    }
+    setCatalogSearching(true);
+    setCatalogError('');
+    setCatalogMessage('');
+    try {
+      const response = await fetch('/api/search?query=' + encodeURIComponent(query) + '&region=US');
+      const payload = await response.json() as { results?: CatalogSearchResult[]; error?: string };
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          catalog_source_not_configured: 'Live title search is not configured on this deployment.',
+          catalog_provider_unavailable: 'The title catalog is temporarily unavailable. Please try again.',
+          catalog_request_failed: 'The title catalog could not be reached. Please try again.',
+        };
+        throw new Error(messages[payload.error || ''] || 'Title search failed. Please try again.');
+      }
+      setCatalogResults(Array.isArray(payload.results) ? payload.results : []);
+      if (!payload.results?.length) setCatalogError('No matching movies or series found. Try another title.');
+    } catch (error) {
+      setCatalogResults([]);
+      setCatalogError(error instanceof Error ? error.message : 'Title search failed. Please try again.');
+    } finally {
+      setCatalogSearching(false);
+    }
+  };
+
+  const addCatalogTitle = (result: CatalogSearchResult) => {
+    const duplicate = watchlist.some(item => item.title.trim().toLowerCase() === result.title.trim().toLowerCase());
+    if (duplicate) {
+      setCatalogMessage('“' + result.title + '” is already on your watchlist.');
+      return;
+    }
+    const savedTitle: SavedTitle = {
+      id: 'catalog-' + result.id,
+      title: result.title,
+      type: result.type,
+      provider: 'Auto-select from My Services',
+      accent: 'from-cyan-500/30 to-indigo-950',
+      source: 'catalog',
+    };
+    setWatchlist(current => [savedTitle, ...current]);
+    setCatalogMessage('Added “' + result.title + '” to your watchlist. Where to watch and Watch on TV will use live availability.');
   };
 
   useEffect(() => {
@@ -954,7 +1019,7 @@ function App() {
 
           {activeTab === 'watchlist' && <section>
             {tvConnectedNotice && <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={16} /></span><div><p className="text-sm font-semibold text-emerald-200">TV connected</p><p className="text-xs text-white/40">Choose a title below to send it to your TV.</p></div></div><button onClick={() => setTvConnectedNotice(false)} className="rounded-full p-1.5 text-white/30 hover:bg-white/5 hover:text-white"><X size={16} /></button></div>}
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => { setManualTitle(''); setManualTitleError(''); setShowAddTitle(true); }} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">Add title</button>{ENABLE_TEST_WATCHLIST_IMPORT && <button onClick={async () => {
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">One place</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">My Watchlist</h1><p className="mt-2 text-white/45">No more remembering which app you saved something in.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => { setCatalogQuery(''); setCatalogResults([]); setCatalogError(''); setCatalogMessage(''); setShowCatalogSearch(true); }} className="rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-black hover:bg-white/90">Find titles</button><button onClick={() => { setManualTitle(''); setManualTitleError(''); setShowAddTitle(true); }} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">Add manually</button>{ENABLE_TEST_WATCHLIST_IMPORT && <button onClick={async () => {
               setImportMessage('');
               const nonce = createImportNonce();
               importNonceRef.current = nonce;
@@ -992,6 +1057,23 @@ function App() {
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-white/35">New accounts receive the planned 72-hour premium trial window. Payment collection will be added after the core product flow is validated.</div>
           {accountMessage && <p className="mt-4 text-sm text-cyan-200">{accountMessage}</p>}
         </>}
+      </Modal>}
+
+      {showCatalogSearch && <Modal title="Find a movie or series" onClose={() => setShowCatalogSearch(false)}>
+        <p className="mb-4 text-sm leading-6 text-white/45">Search the live title catalog and add a match to your list. Trakt is optional; regular users do not need a Trakt account.</p>
+        <form onSubmit={searchCatalog} className="flex gap-2">
+          <input autoFocus value={catalogQuery} onChange={event => setCatalogQuery(event.target.value)} placeholder="Search a movie or series" className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25" />
+          <button type="submit" disabled={catalogSearching} className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black disabled:opacity-50">{catalogSearching ? 'Searching…' : 'Search'}</button>
+        </form>
+        {catalogError && <p role="status" className="mt-3 text-sm text-amber-200">{catalogError}</p>}
+        {catalogMessage && <p role="status" className="mt-3 text-sm text-emerald-200">{catalogMessage}</p>}
+        {catalogResults.length > 0 && <div className="mt-4 max-h-[48vh] space-y-2 overflow-y-auto">{catalogResults.map(result => {
+          const saved = watchlist.some(item => item.title.trim().toLowerCase() === result.title.trim().toLowerCase());
+          return <div key={result.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="min-w-0"><p className="font-medium">{result.title}</p><p className="mt-1 text-xs text-white/40">{result.type}{result.year ? ' • ' + result.year : ''}</p></div>
+            <button onClick={() => addCatalogTitle(result)} disabled={saved} className="shrink-0 rounded-full bg-white px-3 py-2 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">{saved ? 'Saved' : 'Add to list'}</button>
+          </div>;
+        })}</div>}
       </Modal>}
 
       {showAddTitle && <Modal title="Add a title to your watchlist" onClose={() => { setShowAddTitle(false); setManualTitleError(''); }}>
@@ -1155,7 +1237,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function TitleGrid({ titles, onWatch, onWhereToWatch, onRemove }: { titles: SavedTitle[]; onWatch: (title: SavedTitle) => void; onWhereToWatch: (title: SavedTitle) => void; onRemove: (title: SavedTitle) => void }) {
-  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{titles.map(title => <article key={title.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]"><div className={`flex h-40 items-end bg-gradient-to-br ${title.accent} p-5`}><div><span className="text-xs uppercase tracking-[0.18em] text-white/45">{title.type}</span><h3 className="mt-1 text-2xl font-semibold">{title.title}</h3></div></div><div className="flex items-center justify-between p-4"><div><p className="text-sm">{title.source === 'trakt' ? 'Trakt watchlist' : title.provider}</p><p className="text-xs text-white/35">Saved to your list</p></div><div className="flex gap-2"><button onClick={() => onWhereToWatch(title)} className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/5">Where to watch</button><button onClick={() => onWatch(title)} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-black">Watch on TV</button><button onClick={() => onRemove(title)} aria-label={'Remove ' + title.title + ' from Stream Command'} title="Remove from Stream Command" className="grid h-8 w-8 place-items-center self-center rounded-full border border-white/10 text-white/40 hover:bg-white/5 hover:text-white"><X size={14} /></button></div></div></article>)}</div>;
+  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{titles.map(title => <article key={title.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]"><div className={`flex h-40 items-end bg-gradient-to-br ${title.accent} p-5`}><div><span className="text-xs uppercase tracking-[0.18em] text-white/45">{title.type}</span><h3 className="mt-1 text-2xl font-semibold">{title.title}</h3></div></div><div className="flex items-center justify-between p-4"><div><p className="text-sm">{title.source === 'trakt' ? 'Trakt watchlist' : title.source === 'catalog' ? 'Live title catalog' : title.provider}</p><p className="text-xs text-white/35">Saved to your list</p></div><div className="flex gap-2"><button onClick={() => onWhereToWatch(title)} className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/5">Where to watch</button><button onClick={() => onWatch(title)} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-black">Watch on TV</button><button onClick={() => onRemove(title)} aria-label={'Remove ' + title.title + ' from Stream Command'} title="Remove from Stream Command" className="grid h-8 w-8 place-items-center self-center rounded-full border border-white/10 text-white/40 hover:bg-white/5 hover:text-white"><X size={14} /></button></div></div></article>)}</div>;
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
