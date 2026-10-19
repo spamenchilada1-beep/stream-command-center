@@ -202,7 +202,12 @@ export default async function handler(req, res) {
 
     const searchData = await searchResponse.json();
     const results = Array.isArray(searchData.title_results) ? searchData.title_results : [];
-    const exact = results.find(item => matchesTitleCandidate(item, { title }));
+    const exact = results.find(item => matchesTitleCandidate(item, {
+      title,
+      year: requestedYear,
+      imdbId: requestedImdbId,
+      tmdbId: requestedTmdbId,
+    }));
 
     if (!exact?.id) return json(res, 404, { error: 'title_not_found', title });
 
