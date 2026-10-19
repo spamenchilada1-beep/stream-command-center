@@ -126,6 +126,7 @@
   ],
   "externally_connectable": {
     "matches": [
+      "https://stream.athenawaypoints.com/*",
       "https://stream-command-center-three.vercel.app/*"
     ]
   }
