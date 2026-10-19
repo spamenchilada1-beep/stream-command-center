@@ -1266,7 +1266,7 @@ function TitleGrid({ titles, onWatch, onWhereToWatch, onRemove }: { titles: Save
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-[#111219] p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="text-xl font-semibold">{title}</h2><button onClick={onClose} className="rounded-full p-2 text-white/45 hover:bg-white/5 hover:text-white"><X size={18} /></button></div>{children}</div></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm"><div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-white/10 bg-[#111219] p-4 shadow-2xl sm:p-6"><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">{title}</h2><button onClick={onClose} className="rounded-full p-2 text-white/45 hover:bg-white/5 hover:text-white"><X size={18} /></button></div>{children}</div></div>;
 }
 
 export default App;
