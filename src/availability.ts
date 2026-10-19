@@ -14,7 +14,7 @@ export type AvailabilityItem = {
 };
 
 export type AvailabilityResult = {
-  source: 'motn' | 'watchmode' | 'demo';
+  source: 'motn' | 'watchmode' | 'unavailable';
   region: string;
   title: {
     id: number | string;
@@ -25,33 +25,40 @@ export type AvailabilityResult = {
     tmdbId: number | null;
   };
   availability: AvailabilityItem[];
+  error?: string;
 };
 
-const demo: Record<string, AvailabilityItem[]> = {
-  yellowstone: [
-    { providerId: 0, providerName: 'Paramount+', type: 'sub', region: 'US', webUrl: 'https://www.paramountplus.com/', iosUrl: null, androidUrl: null, tvosUrl: null, androidTvUrl: null, rokuUrl: null, price: null, format: null },
-    { providerId: 0, providerName: 'Prime Video', type: 'sub', region: 'US', webUrl: 'https://www.primevideo.com/', iosUrl: null, androidUrl: null, tvosUrl: null, androidTvUrl: null, rokuUrl: null, price: null, format: null },
-  ],
-  bear: [
-    { providerId: 0, providerName: 'Hulu', type: 'sub', region: 'US', webUrl: 'https://www.hulu.com/', iosUrl: null, androidUrl: null, tvosUrl: null, androidTvUrl: null, rokuUrl: null, price: null, format: null },
-  ],
-  fallout: [
-    { providerId: 0, providerName: 'Prime Video', type: 'sub', region: 'US', webUrl: 'https://www.primevideo.com/', iosUrl: null, androidUrl: null, tvosUrl: null, androidTvUrl: null, rokuUrl: null, price: null, format: null },
-  ],
-};
+function unavailable(title: string, error: string): AvailabilityResult {
+  return {
+    source: 'unavailable',
+    region: 'US',
+    title: { id: title, name: title, type: 'unknown', year: null, imdbId: null, tmdbId: null },
+    availability: [],
+    error,
+  };
+}
 
 export async function getAvailability(title: string): Promise<AvailabilityResult> {
   try {
     const response = await fetch(`/api/availability?title=${encodeURIComponent(title)}&region=US`);
-    if (response.ok) return await response.json() as AvailabilityResult;
-  } catch {
-    // Fall through to the development-safe local fallback.
-  }
 
-  return {
-    source: 'demo',
-    region: 'US',
-    title: { id: title, name: title, type: 'unknown', year: null, imdbId: null, tmdbId: null },
-    availability: demo[title.toLowerCase()] || [],
-  };
+    if (response.ok) {
+      const result = await response.json() as Partial<AvailabilityResult>;
+      if ((result.source === 'motn' || result.source === 'watchmode') && Array.isArray(result.availability)) {
+        return result as AvailabilityResult;
+      }
+      return unavailable(title, 'invalid_availability_response');
+    }
+
+    let error = `availability_http_${response.status}`;
+    try {
+      const body = await response.json() as { error?: unknown };
+      if (typeof body.error === 'string') error = body.error;
+    } catch {
+      // Keep the HTTP status as the diagnostic.
+    }
+    return unavailable(title, error);
+  } catch {
+    return unavailable(title, 'availability_request_failed');
+  }
 }

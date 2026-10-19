@@ -1076,12 +1076,24 @@ function App() {
 
       {showWhereToWatch && selectedTitle && <Modal title={`Where to watch “${selectedTitle.title}”`} onClose={() => { setShowWhereToWatch(false); setAvailability(null); }}>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-white/45">{availability && (availability.source === 'watchmode' || availability.source === 'motn') ? 'Live U.S. availability' : 'Development fallback availability'}</p>
-          {availability && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/35">{availability.source}</span>}
+          <p className="text-sm text-white/45">{availability && (availability.source === 'watchmode' || availability.source === 'motn') ? 'Live U.S. availability' : 'Live availability unavailable'}</p>
+          {availability && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/35">{availability.source === 'unavailable' ? 'unavailable' : availability.source}</span>}
         </div>
         {availabilityLoading ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/45">Checking current availability…</div> : availability && availability.availability.length > 0 ? <div className="space-y-2">
-          {availability.availability.map((item, index) => {
-            const provider = providers.find(entry => entry.name === item.providerName);
+          {[...availability.availability].sort((a, b) => {
+            const isSelected = (providerName: string) => {
+              const match = providers.find(entry =>
+                normalizeProviderName(entry.name) === normalizeProviderName(providerName) ||
+                (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(providerName))
+              );
+              return match ? connected.includes(match.id) : false;
+            };
+            return Number(isSelected(b.providerName)) - Number(isSelected(a.providerName));
+          }).map((item, index) => {
+            const provider = providers.find(entry =>
+              normalizeProviderName(entry.name) === normalizeProviderName(item.providerName) ||
+              (entry.host && normalizeProviderName(entry.host) === normalizeProviderName(item.providerName))
+            );
             const connectedHere = provider ? connected.includes(provider.id) : false;
             const availabilityLabel = item.type === 'free' ? 'Free' : item.type === 'rent' ? 'Rent' : item.type === 'buy' ? 'Buy' : item.type === 'tve' ? 'TV provider login' : 'Subscription';
             return <div key={`${item.providerName}-${item.type}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -1089,7 +1101,7 @@ function App() {
               <button onClick={() => { if (item.webUrl) { window.open(item.webUrl, '_blank', 'noopener,noreferrer'); setShowWhereToWatch(false); } }} disabled={!item.webUrl} className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">Watch</button>
             </div>;
           })}
-        </div> : <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">No current availability was returned for this title.</div>}
+        </div> : availability?.source === 'unavailable' ? <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">{availability.error === 'availability_source_not_configured' ? 'Live availability is not configured on this deployment. Demo results are disabled to avoid showing the wrong services.' : 'Live availability could not be loaded. Demo results are disabled to avoid showing incorrect services.'}</div> : <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/45">No current availability was returned by the live catalog for this title.</div>}
       </Modal>}
 
       {receiverMode && showTv && <div className="fixed inset-0 z-50 h-screen max-h-screen overflow-hidden bg-[#05060a] text-white">
