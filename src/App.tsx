@@ -871,6 +871,7 @@ function App() {
       sentAt: Date.now(),
     };
     await updateDoc(doc(db, 'pairingSessions', code), { command });
+    console.info('[TV COMMAND] Wrote paired receiver command', { platform, pairingCode: code, title: title.title, routeStatus: command.routeStatus, hasLaunchUri: !!command.launchUri });
     if (platform === 'fire-tv' || platform === 'samsung') {
       const bridgeDocId = platform === 'fire-tv' ? 'bridge_fire_tv' : 'bridge_samsung';
       await setDoc(doc(db, 'pairingSessions', bridgeDocId), {
@@ -883,24 +884,32 @@ function App() {
     }
   };
   const sendToTv = async (title: SavedTitle) => {
-    const savedCode = localStorage.getItem('stream-tv-session');
-    const activeCode = savedCode || (pairingStatus === 'paired' && pairingCode ? pairingCode : null);
-    if (activeCode) {
-      const sessionSnap = await getDoc(doc(db, 'pairingSessions', activeCode));
-      if (sessionSnap.exists() && sessionSnap.data().status === 'paired') {
-        const session = sessionSnap.data();
-        setPairingCode(activeCode);
-        setPairingSession(session);
-        setPairingStatus('paired');
-        setTvPaired(true);
-        setShowTv(true);
-        if (!savedCode) localStorage.setItem('stream-tv-session', activeCode);
-        await sendTitleToPairedTv(title, activeCode, session);
-        return;
+    setPairingError('');
+    try {
+      const savedCode = localStorage.getItem('stream-tv-session');
+      const activeCode = savedCode || (pairingStatus === 'paired' && pairingCode ? pairingCode : null);
+      if (activeCode) {
+        const sessionSnap = await getDoc(doc(db, 'pairingSessions', activeCode));
+        if (sessionSnap.exists() && sessionSnap.data().status === 'paired') {
+          const session = sessionSnap.data();
+          setPairingCode(activeCode);
+          setPairingSession(session);
+          setPairingStatus('paired');
+          setTvPaired(true);
+          setShowTv(true);
+          if (!savedCode) localStorage.setItem('stream-tv-session', activeCode);
+          await sendTitleToPairedTv(title, activeCode, session);
+          console.info('[TV COMMAND] Firebase command written', { platform: session.platform, pairingCode: activeCode, title: title.title });
+          return;
+        }
+        if (savedCode) localStorage.removeItem('stream-tv-session');
       }
-      if (savedCode) localStorage.removeItem('stream-tv-session');
+      await startTvPairing(title);
+    } catch (error) {
+      console.error('[TV COMMAND] Send failed', error);
+      setPairingError(error instanceof Error ? error.message : 'The TV command could not be sent. Check the connection and pairing session.');
+      setShowTv(true);
     }
-    await startTvPairing(title);
   };
   const openWhereToWatch = async (title: SavedTitle) => {
     setSelectedTitle(title);
@@ -914,7 +923,12 @@ function App() {
 
   useEffect(() => {
     const command = pairingSession?.command as TvCommand | undefined;
-    if (!receiverMode || !command?.launchUri || !command.sentAt) return;
+    if (!receiverMode || !command?.sentAt) return;
+    console.info('[TV RECEIVER] Command snapshot received', { platform: command.platform, title: command.title, hasLaunchUri: !!command.launchUri, routeStatus: command.routeStatus, sentAt: command.sentAt });
+    if (!command.launchUri) {
+      setPairingError('The TV received the command, but no launch link was available for this title.');
+      return;
+    }
     if (lastAutoLaunchCommand.current === command.sentAt) return;
     lastAutoLaunchCommand.current = command.sentAt;
     if (command.platform === 'samsung') return;
