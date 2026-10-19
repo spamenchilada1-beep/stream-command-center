@@ -47,28 +47,35 @@ function matchesTitleCandidate(candidate, requested) {
   const requestedName = normalizeTitle(requested?.title);
   if (!candidateName || !requestedName) return false;
 
-  const year = requested?.year ? Number(requested.year) : null;
-  const candidateNameMatches = candidateName === requestedName ||
-    (year != null && candidateName === requestedName + String(year));
-  if (!candidateNameMatches) return false;
-
   const candidateType = normalizeTitleType(candidate?.type ?? candidate?.showType ?? candidate?.title_type);
   const requestedType = normalizeTitleType(requested?.type);
   if (candidateType && requestedType && candidateType !== requestedType) return false;
 
   const requestedImdbId = String(requested?.imdbId || '').trim().toLowerCase();
   const candidateImdbId = String(candidate?.imdb_id || candidate?.imdbId || '').trim().toLowerCase();
-  if (requestedImdbId && candidateImdbId && requestedImdbId !== candidateImdbId) return false;
+  const hasBothImdbIds = Boolean(requestedImdbId && candidateImdbId);
+  if (hasBothImdbIds && requestedImdbId !== candidateImdbId) return false;
+  const imdbIdentityMatches = hasBothImdbIds && requestedImdbId === candidateImdbId;
 
   const requestedTmdb = normalizeTmdbIdentity(requested?.tmdbId, requestedType);
   const candidateTmdb = normalizeTmdbIdentity(candidate?.tmdb_id ?? candidate?.tmdbId, candidateType);
-  if (requestedTmdb && candidateTmdb) {
-    if (requestedTmdb.id && candidateTmdb.id && requestedTmdb.id !== candidateTmdb.id) return false;
+  const hasBothTmdbIds = Boolean(requestedTmdb?.id && candidateTmdb?.id);
+  if (hasBothTmdbIds) {
+    if (requestedTmdb.id !== candidateTmdb.id) return false;
     if (requestedTmdb.type && candidateTmdb.type && requestedTmdb.type !== candidateTmdb.type) return false;
   }
+  const tmdbIdentityMatches = hasBothTmdbIds;
+
+  // Cross-provider ID matches outrank title punctuation/localized-name differences.
+  // If IDs are absent, require an exact normalized title and don't accept year conflicts.
+  const identityMatches = imdbIdentityMatches || tmdbIdentityMatches;
+  const year = requested?.year != null ? Number(requested.year) : null;
+  const candidateNameMatches = candidateName === requestedName ||
+    (year != null && candidateName === requestedName + String(year));
+  if (!candidateNameMatches && !identityMatches) return false;
 
   const candidateYearValue = candidate?.year ?? candidate?.release_year ?? candidate?.first_air_year;
-  if (year != null && candidateYearValue != null && Number(candidateYearValue) !== year) return false;
+  if (!identityMatches && year != null && candidateYearValue != null && Number(candidateYearValue) !== year) return false;
   return true;
 }
 
@@ -235,10 +242,6 @@ export default async function handler(req, res) {
               if (!sourcesCrossChecked) {
                 return json(res, 502, { error: 'availability_sources_unverified', title });
               }
-              if (enrichedAvailability.length === 0) {
-                return json(res, 502, { error: 'availability_sources_disagree', title });
-              }
-
               return json(res, 200, {
                 source: 'watchmode',
                 region,
