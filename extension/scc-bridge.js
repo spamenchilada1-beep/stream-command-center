@@ -1,6 +1,7 @@
 const SCC_ORIGINS = new Set([
   'https://stream.athenawaypoints.com',
   'https://stream-command-center-three.vercel.app',
+  'https://stream-command-center-git-fix-strict-availab-d1f6a3-athena-c403.vercel.app',
 ]);
 
 window.addEventListener('message', event => {
