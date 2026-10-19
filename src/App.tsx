@@ -153,7 +153,8 @@ const providerWebFallbacks: Record<string, string> = {
 };
 
 function normalizeProviderName(value: string): string {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // Keep provider names consistent when data sources use "Paramount+" vs "Paramount Plus".
+  const normalized = value.toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '');
   const aliases: Record<string, string> = {
     amazonprimevideo: 'primevideo',
     hbomax: 'max',
@@ -936,6 +937,7 @@ function App() {
     setShowWhereToWatch(true);
     const result = await getAvailability(title.title, {
       catalogId: title.catalogId,
+      type: title.type,
       year: title.year,
       imdbId: title.imdbId,
       tmdbId: title.tmdbId,
