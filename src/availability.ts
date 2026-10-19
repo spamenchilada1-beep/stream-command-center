@@ -40,11 +40,12 @@ function unavailable(title: string, error: string): AvailabilityResult {
 
 export async function getAvailability(
   title: string,
-  catalog?: { catalogId?: string; year?: number | null; imdbId?: string | null; tmdbId?: string | null },
+  catalog?: { catalogId?: string; type?: 'Movie' | 'Series'; year?: number | null; imdbId?: string | null; tmdbId?: string | null },
 ): Promise<AvailabilityResult> {
   try {
     const params = new URLSearchParams({ title, region: 'US' });
     if (catalog?.catalogId) params.set('catalogId', catalog.catalogId);
+    if (catalog?.type) params.set('type', catalog.type);
     if (catalog?.year != null) params.set('year', String(catalog.year));
     if (catalog?.imdbId) params.set('imdbId', catalog.imdbId);
     if (catalog?.tmdbId) params.set('tmdbId', catalog.tmdbId);
