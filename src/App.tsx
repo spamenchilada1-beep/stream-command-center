@@ -982,7 +982,7 @@ function App() {
                 if (importNonceRef.current === nonce) setImportMessage('Importer diagnostic: no extension bridge acknowledgement was received.');
               }, 3000);
             }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div><div className="mb-5 flex flex-wrap items-center gap-2"><button onClick={handleTraktConnectOrSync} disabled={traktBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] disabled:opacity-50">{traktBusy ? 'Syncing Trakt...' : traktConnected ? 'Sync Trakt' : 'Connect Trakt'}</button>{traktConnected && <button onClick={handleTraktDisconnect} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Disconnect Trakt</button>}{traktHasHiddenTitles && <button onClick={restoreHiddenTraktTitles} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Restore hidden titles</button>}{traktMessage && <p role="status" className="w-full text-xs text-white/45">{traktMessage}</p>}</div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                 <Search size={17} className="shrink-0 text-white/35" />
                 <input
                   value={watchlistSearch}
@@ -992,7 +992,7 @@ function App() {
                   className="w-full bg-transparent text-sm outline-none placeholder:text-white/30"
                 />
                 {watchlistSearch && <button type="button" onClick={() => setWatchlistSearch('')} aria-label="Clear watchlist search" className="text-xs text-white/45 hover:text-white">Clear</button>}
-              </label>
+              </div>
               <div className="flex gap-2" aria-label="Filter watchlist by type">
                 {(['All', 'Movie', 'Series'] as const).map(filter => (
                   <button
