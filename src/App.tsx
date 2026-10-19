@@ -988,7 +988,7 @@ function App() {
                   value={watchlistSearch}
                   onChange={event => setWatchlistSearch(event.target.value)}
                   aria-label="Search your watchlist"
-                  placeholder="Search titles or services"
+                  placeholder="Search saved titles or services"
                   className="w-full bg-transparent text-sm outline-none placeholder:text-white/30"
                 />
                 {watchlistSearch && <button type="button" onClick={() => setWatchlistSearch('')} aria-label="Clear watchlist search" className="text-xs text-white/45 hover:text-white">Clear</button>}
@@ -1007,6 +1007,7 @@ function App() {
                 ))}
               </div>
             </div>
+            <p className="mb-3 text-xs text-white/35">This searches titles already in your watchlist. Use <span className="text-white/60">Add title</span> to save another movie or series.</p>
             <p className="mb-4 text-xs text-white/35">{filteredWatchlist.length} of {watchlist.length} saved {watchlist.length === 1 ? 'title' : 'titles'}</p>
             {filteredWatchlist.length > 0 ? (
               <TitleGrid titles={filteredWatchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} />
