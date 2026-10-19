@@ -989,7 +989,21 @@ function App() {
       launchNativeTvUrl(receiverUrl);
       return;
     }
-    if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
+    if (command.routeStatus === 'adapter-ready') {
+      launchNativeTvUrl(command.launchUri);
+      return;
+    }
+    // A Fire TV may be detected as generic Browser / TV web when its Silk user agent
+    // does not expose a recognizable Fire TV token. In receiver mode, a valid HTTPS
+    // fallback must still be opened; otherwise the UI reports the command but does nothing.
+    if (command.routeStatus === 'receiver-fallback' && command.launchUri.startsWith('https://')) {
+      console.info('[TV RECEIVER] Opening HTTPS fallback route', {
+        platform: command.platform,
+        title: command.title,
+        host: new URL(command.launchUri).hostname,
+      });
+      launchNativeTvUrl(command.launchUri);
+    }
   }, [receiverMode, pairingSession?.command]);
 
   if (bridgeMode) {
