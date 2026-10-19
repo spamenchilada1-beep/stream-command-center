@@ -293,6 +293,8 @@ function App() {
   const [pairingStatus, setPairingStatus] = useState<'idle' | 'waiting' | 'phone-ready' | 'paired'>('idle');
   const [pairingError, setPairingError] = useState('');
   const [pairingBusy, setPairingBusy] = useState(false);
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [commandMessage, setCommandMessage] = useState('');
   const [pairingSession, setPairingSession] = useState<any>(null);
   const [tvPlatform, setTvPlatform] = useState<TvPlatform>('browser');
   const [receiverMode, setReceiverMode] = useState(false);
@@ -843,7 +845,14 @@ function App() {
   const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null, sessionOverride: any = null) => {
     const title = titleOverride || selectedTitle;
     const code = codeOverride || pairingCode;
-    if (!code || !title) return;
+    if (!code || !title) {
+      setCommandMessage('Choose a title and connect the TV before sending.');
+      return;
+    }
+    console.info('[TV COMMAND] Send button tapped', { title: title.title, pairingCode: code });
+    setCommandBusy(true);
+    setCommandMessage('Sending command to TV…');
+    try {
     setSelectedTitle(title);
     setPairingCode(code);
     const activeSession = sessionOverride || pairingSession; const platform = (activeSession?.platform || tvPlatform) as TvPlatform;
@@ -899,8 +908,15 @@ function App() {
         updatedAt: serverTimestamp(),
       });
     }
+    setCommandMessage('Command written to the paired TV session. If the TV stays idle, the receiver did not launch it.');
+    } catch (error: any) {
+      console.error('[TV COMMAND] Send failed', error);
+      setCommandMessage(`Command failed: ${error?.code || error?.message || 'unknown error'}`);
+    } finally {
+      setCommandBusy(false);
+    }
   };
-  const sendToTv = async (title: SavedTitle) => {
+    const sendToTv = async (title: SavedTitle) => {
     setPairingError('');
     try {
       const savedCode = localStorage.getItem('stream-tv-session');
@@ -1217,7 +1233,8 @@ function App() {
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={30} /></div>            <p className="mt-5 font-semibold">Living Room TV is paired</p>
             <p className="mt-2 text-sm leading-6 text-white/45">This device is now connected to the live TV session.</p>
             {pairingSession?.command && <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">TV command received</p><p className="mt-1 font-semibold">{pairingSession.command.title}</p><p className="text-xs text-white/35">Route: {pairingSession.command.provider} • {tvPlatforms.find(item => item.id === pairingSession.command.platform)?.name || pairingSession.command.platform}</p><p className="mt-2 text-xs text-white/45">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV deep-link route is waiting for the provider’s licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Platform adapter is ready for native TV integration.' : 'Receiver fallback is ready.'}</p>{pairingSession.command.launchUri && <p className="mt-3 text-xs text-emerald-200/70">Sent to the paired TV. Keep the TV receiver open to launch it there.</p>}</div>}
-            {selectedTitle && <button onClick={sendTitleToPairedTv} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Send “{selectedTitle.title}” to TV</button>}
+            {selectedTitle && <button type="button" disabled={commandBusy} onClick={() => { void sendTitleToPairedTv(); }} className="mt-5 min-h-11 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-60">{commandBusy ? 'Sending…' : `Send “${selectedTitle.title}” to TV`}</button>}
+            {commandMessage && <p role="status" className="mt-3 text-xs leading-5 text-cyan-100/80">{commandMessage}</p>}
             <button onClick={() => setShowTv(false)} className="mt-3 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-white/70">Done</button>
           </>}
         </div>
