@@ -5,55 +5,70 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function normalizeTitle(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 function normalizeProviderName(value) {
-  // Normalize the plus sign as a word so "Paramount+" and "Paramount Plus"
-  // can be compared as the same service across provider catalogs.
+  // Treat "Paramount+" and "Paramount Plus" consistently across catalog APIs.
   return String(value || '').toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '');
 }
 
-function applyKnownAvailabilityCorrections(title, year, items, region) {
-  // Verified U.S. rights correction for the original Yellowstone series (2018).
-  // Official Peacock listing: https://www.peacocktv.com/stream-tv/yellowstone
-  // Paramount+ official support says Yellowstone is not available in the U.S.:
-  // https://cbsi.my.salesforce-sites.com/CBSi/articles/en_US/Knowledge/PD-Why-can-t-I-watch-Yellowstone-on-Paramount
-  const titleKey = normalizeProviderName(title).replace(/2018$/, '');
-  const isOriginalYellowstone = region === 'US' &&
-    titleKey === 'yellowstone' &&
-    (year == null || Number(year) === 2018);
-  if (!isOriginalYellowstone) return items;
+function normalizeTitleType(value) {
+  const type = String(value || '').toLowerCase();
+  if (/movie|film/.test(type)) return 'movie';
+  if (/series|show|\btv\b|television/.test(type)) return 'tv';
+  return null;
+}
 
-  const corrected = items.filter(item => normalizeProviderName(item.providerName) !== 'paramountplus');
-  if (!corrected.some(item => normalizeProviderName(item.providerName) === 'peacock')) {
-    corrected.unshift({
-      providerId: 'peacock',
-      providerName: 'Peacock',
-      type: 'sub',
-      region: 'US',
-      webUrl: 'https://www.peacocktv.com/stream-tv/yellowstone',
-      iosUrl: null,
-      androidUrl: null,
-      tvosUrl: null,
-      androidTvUrl: null,
-      rokuUrl: null,
-      price: null,
-      format: null,
-    });
+function normalizeTmdbIdentity(value, inferredType = null) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+  const prefixed = raw.match(/^(movie|tv|series)[\/-](\d+)$/);
+  if (prefixed) {
+    return {
+      id: prefixed[2],
+      type: prefixed[1] === 'movie' ? 'movie' : 'tv',
+    };
   }
-  return corrected;
+  const numeric = raw.match(/(\d+)$/);
+  return {
+    id: numeric ? numeric[1] : raw.replace(/[^a-z0-9]/g, ''),
+    type: normalizeTitleType(inferredType),
+  };
 }
 
 function matchesTitleCandidate(candidate, requested) {
-  const candidateName = normalizeProviderName(candidate?.name);
-  const requestedName = normalizeProviderName(requested?.title);
+  const candidateName = normalizeTitle(candidate?.name ?? candidate?.title ?? candidate?.original_title);
+  const requestedName = normalizeTitle(requested?.title);
   if (!candidateName || !requestedName) return false;
 
-  const year = requested?.year ? String(requested.year) : '';
-  const nameMatches = candidateName === requestedName || (year && candidateName === requestedName + year);
-  if (!nameMatches) return false;
+  const year = requested?.year ? Number(requested.year) : null;
+  const candidateNameMatches = candidateName === requestedName ||
+    (year != null && candidateName === requestedName + String(year));
+  if (!candidateNameMatches) return false;
 
-  if (requested?.imdbId && candidate?.imdb_id && String(candidate.imdb_id) !== String(requested.imdbId)) return false;
-  if (requested?.tmdbId && candidate?.tmdb_id && String(candidate.tmdb_id) !== String(requested.tmdbId)) return false;
-  if (requested?.year && candidate?.year && Number(candidate.year) !== Number(requested.year)) return false;
+  const candidateType = normalizeTitleType(candidate?.type ?? candidate?.showType ?? candidate?.title_type);
+  const requestedType = normalizeTitleType(requested?.type);
+  if (candidateType && requestedType && candidateType !== requestedType) return false;
+
+  const requestedImdbId = String(requested?.imdbId || '').trim().toLowerCase();
+  const candidateImdbId = String(candidate?.imdb_id || candidate?.imdbId || '').trim().toLowerCase();
+  if (requestedImdbId && candidateImdbId && requestedImdbId !== candidateImdbId) return false;
+
+  const requestedTmdb = normalizeTmdbIdentity(requested?.tmdbId, requestedType);
+  const candidateTmdb = normalizeTmdbIdentity(candidate?.tmdb_id ?? candidate?.tmdbId, candidateType);
+  if (requestedTmdb && candidateTmdb) {
+    if (requestedTmdb.id && candidateTmdb.id && requestedTmdb.id !== candidateTmdb.id) return false;
+    if (requestedTmdb.type && candidateTmdb.type && requestedTmdb.type !== candidateTmdb.type) return false;
+  }
+
+  const candidateYearValue = candidate?.year ?? candidate?.release_year ?? candidate?.first_air_year;
+  if (year != null && candidateYearValue != null && Number(candidateYearValue) !== year) return false;
   return true;
 }
 
