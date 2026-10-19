@@ -292,6 +292,9 @@ function App() {
   const [tvPaired, setTvPaired] = useState(false);
   const [pairingStatus, setPairingStatus] = useState<'idle' | 'waiting' | 'phone-ready' | 'paired'>('idle');
   const [pairingError, setPairingError] = useState('');
+  const [pairingBusy, setPairingBusy] = useState(false);
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [commandMessage, setCommandMessage] = useState('');
   const [pairingSession, setPairingSession] = useState<any>(null);
   const [tvPlatform, setTvPlatform] = useState<TvPlatform>('browser');
   const [receiverMode, setReceiverMode] = useState(false);
@@ -770,8 +773,18 @@ function App() {
     });
   };
   const confirmPhonePairing = async () => {
-    if (!pairingCode) return;
+    console.info('[TV PAIRING] Confirmation tapped', {
+      hasPairingCode: !!pairingCode,
+      authReady,
+      hasCurrentUser: !!auth.currentUser,
+      status: pairingStatus,
+    });
+    if (!pairingCode) {
+      setPairingError('No pairing code is loaded. Close this screen and reopen pairing from the TV.');
+      return;
+    }
     setPairingError('');
+    setPairingBusy(true);
     try {
       if (!auth.currentUser) await signInAnonymously(auth);
       const user = auth.currentUser;
@@ -824,13 +837,22 @@ function App() {
         PAIRING_CODE_EXPIRED: 'That pairing code expired. Start a fresh TV session.',
       };
       setPairingError(messages[code] || `Pairing failed: ${code}`);
+    } finally {
+      setPairingBusy(false);
     }
   };
 
   const sendTitleToPairedTv = async (titleOverride: SavedTitle | null = null, codeOverride: string | null = null, sessionOverride: any = null) => {
     const title = titleOverride || selectedTitle;
     const code = codeOverride || pairingCode;
-    if (!code || !title) return;
+    if (!code || !title) {
+      setCommandMessage('Choose a title and connect the TV before sending.');
+      return;
+    }
+    console.info('[TV COMMAND] Send button tapped', { title: title.title, pairingCode: code });
+    setCommandBusy(true);
+    setCommandMessage('Sending command to TV…');
+    try {
     setSelectedTitle(title);
     setPairingCode(code);
     const activeSession = sessionOverride || pairingSession; const platform = (activeSession?.platform || tvPlatform) as TvPlatform;
@@ -850,14 +872,18 @@ function App() {
     const matchedCatalogProvider = preferred
       ? providers.find(entry => normalizeProviderName(entry.name) === normalizeProviderName(preferred.providerName))
       : undefined;
+    // If title-specific availability has no usable result, still open the known provider
+    // website on the TV instead of writing a command with a null launchUri.
     const providerName = title.source === 'trakt'
-      ? (matchedCatalogProvider?.name || preferred?.providerName || 'No matching streaming service found')
+      ? (matchedCatalogProvider?.name || preferred?.providerName || title.provider)
       : title.provider;
-    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, preferred.webUrl || null) : null;
+    const providerFallbackUrl = providerWebFallbacks[providerName] || null;
+    const webUrl = preferred?.webUrl || providerFallbackUrl;
+    const nativeUrl = preferred ? getNativeTvUrl(platform, providerName, preferred, webUrl) : null;
     const targetUrl = platform === 'samsung'
-      ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : preferred?.webUrl || null)
-      : preferred?.webUrl || null;
-    const route = resolveTvRoute(platform, providerName, preferred?.webUrl || null, nativeUrl);
+      ? (preferred?.androidTvUrl && !preferred.androidTvUrl.toLowerCase().includes('deeplinks available for paid plans') ? preferred.androidTvUrl : webUrl)
+      : webUrl;
+    const route = resolveTvRoute(platform, providerName, webUrl, nativeUrl);
     const command: TvCommand = {
       action: 'open-title',
       platform,
@@ -871,6 +897,7 @@ function App() {
       sentAt: Date.now(),
     };
     await updateDoc(doc(db, 'pairingSessions', code), { command });
+    console.info('[TV COMMAND] Wrote paired receiver command', { platform, pairingCode: code, title: title.title, routeStatus: command.routeStatus, hasLaunchUri: !!command.launchUri });
     if (platform === 'fire-tv' || platform === 'samsung') {
       const bridgeDocId = platform === 'fire-tv' ? 'bridge_fire_tv' : 'bridge_samsung';
       await setDoc(doc(db, 'pairingSessions', bridgeDocId), {
@@ -881,26 +908,49 @@ function App() {
         updatedAt: serverTimestamp(),
       });
     }
-  };
-  const sendToTv = async (title: SavedTitle) => {
-    const savedCode = localStorage.getItem('stream-tv-session');
-    const activeCode = savedCode || (pairingStatus === 'paired' && pairingCode ? pairingCode : null);
-    if (activeCode) {
-      const sessionSnap = await getDoc(doc(db, 'pairingSessions', activeCode));
-      if (sessionSnap.exists() && sessionSnap.data().status === 'paired') {
-        const session = sessionSnap.data();
-        setPairingCode(activeCode);
-        setPairingSession(session);
-        setPairingStatus('paired');
-        setTvPaired(true);
-        setShowTv(true);
-        if (!savedCode) localStorage.setItem('stream-tv-session', activeCode);
-        await sendTitleToPairedTv(title, activeCode, session);
-        return;
-      }
-      if (savedCode) localStorage.removeItem('stream-tv-session');
+    setCommandMessage('Command written to the paired TV session. If the TV stays idle, the receiver did not launch it.');
+    } catch (error: any) {
+      console.error('[TV COMMAND] Send failed', error);
+      setCommandMessage(`Command failed: ${error?.code || error?.message || 'unknown error'}`);
+    } finally {
+      setCommandBusy(false);
     }
-    await startTvPairing(title);
+  };
+    const sendToTv = async (title: SavedTitle) => {
+    setPairingError('');
+    try {
+      const savedCode = localStorage.getItem('stream-tv-session');
+      // Prefer the currently paired session in this app over a possibly stale browser-stored code.
+      const activeCode = pairingStatus === 'paired' && pairingCode
+        ? pairingCode
+        : savedCode;
+      if (activeCode) {
+        const sessionSnap = await getDoc(doc(db, 'pairingSessions', activeCode));
+        if (sessionSnap.exists()) {
+          const session = sessionSnap.data();
+          const sessionIsPaired = session.status === 'paired';
+          const sessionHasTvOwner = typeof session.tvUserId === 'string' && session.tvUserId.length > 0;
+          const sessionPlatformMatches = !session.platform || session.platform === tvPlatform;
+          if (sessionIsPaired && sessionHasTvOwner && sessionPlatformMatches) {
+            setPairingCode(activeCode);
+            setPairingSession(session);
+            setPairingStatus('paired');
+            setTvPaired(true);
+            setShowTv(true);
+            if (savedCode !== activeCode) localStorage.setItem('stream-tv-session', activeCode);
+            await sendTitleToPairedTv(title, activeCode, session);
+            console.info('[TV COMMAND] Firebase command written', { platform: session.platform, pairingCode: activeCode, title: title.title });
+            return;
+          }
+        }
+        if (savedCode) localStorage.removeItem('stream-tv-session');
+      }
+      await startTvPairing(title);
+    } catch (error) {
+      console.error('[TV COMMAND] Send failed', error);
+      setPairingError(error instanceof Error ? error.message : 'The TV command could not be sent. Check the connection and pairing session.');
+      setShowTv(true);
+    }
   };
   const openWhereToWatch = async (title: SavedTitle) => {
     setSelectedTitle(title);
@@ -914,17 +964,46 @@ function App() {
 
   useEffect(() => {
     const command = pairingSession?.command as TvCommand | undefined;
-    if (!receiverMode || !command?.launchUri || !command.sentAt) return;
+    if (!receiverMode || !command?.sentAt) return;
+    console.info('[TV RECEIVER] Command snapshot received', { platform: command.platform, title: command.title, hasLaunchUri: !!command.launchUri, routeStatus: command.routeStatus, sentAt: command.sentAt });
+    if (!command.launchUri) {
+      setPairingError('The TV received the command, but no launch link was available for this title.');
+      return;
+    }
     if (lastAutoLaunchCommand.current === command.sentAt) return;
     lastAutoLaunchCommand.current = command.sentAt;
     if (command.platform === 'samsung') return;
     if (command.platform === 'fire-tv') {
-      // The Fire TV receiver may be running directly in Silk. Open the resolved route there
-      // instead of silently doing nothing; the paired native bridge can still handle app launches.
+      // Silk is a browser, not a reliable Android intent dispatcher. If the resolved route is
+      // an intent URI, open the provider's HTTPS target in Silk instead of sending an unsupported
+      // scheme that can look like a command was delivered but never launch anything.
+      const isIntentUri = command.launchUri.startsWith('intent://');
+      const receiverUrl = isIntentUri && command.targetUrl?.startsWith('https://')
+        ? command.targetUrl
+        : command.launchUri;
+      console.info('[TV RECEIVER] Opening Fire TV route', {
+        title: command.title,
+        routeKind: isIntentUri && receiverUrl !== command.launchUri ? 'https-fallback' : 'resolved-route',
+        urlScheme: receiverUrl.split(':', 1)[0],
+      });
+      launchNativeTvUrl(receiverUrl);
+      return;
+    }
+    if (command.routeStatus === 'adapter-ready') {
       launchNativeTvUrl(command.launchUri);
       return;
     }
-    if (command.routeStatus === 'adapter-ready') launchNativeTvUrl(command.launchUri);
+    // A Fire TV may be detected as generic Browser / TV web when its Silk user agent
+    // does not expose a recognizable Fire TV token. In receiver mode, a valid HTTPS
+    // fallback must still be opened; otherwise the UI reports the command but does nothing.
+    if (command.routeStatus === 'receiver-fallback' && command.launchUri.startsWith('https://')) {
+      console.info('[TV RECEIVER] Opening HTTPS fallback route', {
+        platform: command.platform,
+        title: command.title,
+        host: new URL(command.launchUri).hostname,
+      });
+      launchNativeTvUrl(command.launchUri);
+    }
   }, [receiverMode, pairingSession?.command]);
 
   if (bridgeMode) {
@@ -1126,7 +1205,7 @@ function App() {
                     <p className="text-xs uppercase tracking-[0.2em] text-white/30">Route status</p>
                     <p className="mt-2 text-lg font-medium">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV route ready for a licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Native TV adapter is ready for integration.' : 'Browser receiver fallback is ready.'}</p>
                     <p className="mt-2 text-sm leading-6 text-white/40">{pairingSession.command.platform === 'fire-tv' || pairingSession.command.platform === 'samsung' ? 'Native app handoff is handled on the paired TV so its existing app session is preserved.' : pairingSession.command.routeStatus === 'receiver-fallback' ? 'This receiver can open the provider web experience. Native third-party TV app launching will be enabled through the platform adapter layer.' : 'The command is live and correctly routed without pretending a native app launch is available before the provider/platform integration is connected.'}</p>
-                    {pairingSession.command.launchUri && pairingSession.command.platform !== 'fire-tv' && pairingSession.command.platform !== 'samsung' && <button onClick={() => launchNativeTvUrl(pairingSession.command.launchUri!)} className="mt-5 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black">Open on This TV</button>}
+                    {pairingSession.command.launchUri && <button type="button" onClick={() => launchNativeTvUrl(pairingSession.command.launchUri!)} className="mt-5 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black">Open on This TV</button>}
                   </div>
                 </> : <><h1 className="mt-10 text-5xl font-semibold tracking-[-0.04em] sm:text-7xl">Ready when you are.</h1><p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-white/45">Your phone is connected. Choose a title on the phone and tap Watch on TV.</p></>}
               </div>}
@@ -1155,7 +1234,7 @@ function App() {
             <p className="mt-5 font-semibold">Pair with {pairingSession?.tvName || 'Living Room TV'}?</p>
             <p className="mt-2 text-sm leading-6 text-white/45">This device found a live TV pairing session. Confirm once to connect it.</p>
             {pairingSession?.title && <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-white/35">TV is waiting for</p><p className="mt-1 font-semibold">{pairingSession.title}</p><p className="text-xs text-white/35">{pairingSession.provider}</p></div>}
-            <button onClick={confirmPhonePairing} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Pair this TV</button>
+            <button type="button" disabled={pairingBusy} aria-busy={pairingBusy} onClick={() => { void confirmPhonePairing(); }} className="mt-5 min-h-12 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-60">{pairingBusy ? 'Connecting…' : 'Pair this TV'}</button>
             {pairingError && <p className="mt-3 text-sm text-rose-200">{pairingError}</p>}
           </> : pairingStatus === 'waiting' ? <>
             <div className="mx-auto rounded-2xl border border-white/15 bg-white/[0.04] p-3"><QRCodeSVG value={`${window.location.origin}${window.location.pathname}?pair=${pairingCode}&platform=${encodeURIComponent(tvPlatform)}`} size={170} bgColor="transparent" fgColor="#ffffff" includeMargin /></div>
@@ -1168,7 +1247,8 @@ function App() {
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300"><Check size={30} /></div>            <p className="mt-5 font-semibold">Living Room TV is paired</p>
             <p className="mt-2 text-sm leading-6 text-white/45">This device is now connected to the live TV session.</p>
             {pairingSession?.command && <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-left"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300/70">TV command received</p><p className="mt-1 font-semibold">{pairingSession.command.title}</p><p className="text-xs text-white/35">Route: {pairingSession.command.provider} • {tvPlatforms.find(item => item.id === pairingSession.command.platform)?.name || pairingSession.command.platform}</p><p className="mt-2 text-xs text-white/45">{pairingSession.command.routeStatus === 'licensed-link-needed' ? 'Native TV deep-link route is waiting for the provider’s licensed title link.' : pairingSession.command.routeStatus === 'adapter-ready' ? 'Platform adapter is ready for native TV integration.' : 'Receiver fallback is ready.'}</p>{pairingSession.command.launchUri && <p className="mt-3 text-xs text-emerald-200/70">Sent to the paired TV. Keep the TV receiver open to launch it there.</p>}</div>}
-            {selectedTitle && <button onClick={sendTitleToPairedTv} className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Send “{selectedTitle.title}” to TV</button>}
+            {selectedTitle && <button type="button" disabled={commandBusy} onClick={() => { void sendTitleToPairedTv(); }} className="mt-5 min-h-11 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-60">{commandBusy ? 'Sending…' : `Send “${selectedTitle.title}” to TV`}</button>}
+            {commandMessage && <p role="status" className="mt-3 text-xs leading-5 text-cyan-100/80">{commandMessage}</p>}
             <button onClick={() => setShowTv(false)} className="mt-3 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-white/70">Done</button>
           </>}
         </div>
@@ -1186,7 +1266,7 @@ function TitleGrid({ titles, onWatch, onWhereToWatch, onRemove }: { titles: Save
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-[#111219] p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="text-xl font-semibold">{title}</h2><button onClick={onClose} className="rounded-full p-2 text-white/45 hover:bg-white/5 hover:text-white"><X size={18} /></button></div>{children}</div></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm"><div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-white/10 bg-[#111219] p-4 shadow-2xl sm:p-6"><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">{title}</h2><button onClick={onClose} className="rounded-full p-2 text-white/45 hover:bg-white/5 hover:text-white"><X size={18} /></button></div>{children}</div></div>;
 }
 
 export default App;
