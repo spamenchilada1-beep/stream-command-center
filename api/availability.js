@@ -148,26 +148,28 @@ export default async function handler(req, res) {
                         headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
                       });
                       if (watchmodeSourcesResponse.ok) {
-                        const watchmodeSources = await watchmodeSourcesResponse.json();
-                        const nativeByProvider = new Map((Array.isArray(watchmodeSources) ? watchmodeSources : []).map(source => [normalizeProviderName(source.name), source]));
+                        const watchmodeSourcesPayload = await watchmodeSourcesResponse.json();
+                        const watchmodeSources = Array.isArray(watchmodeSourcesPayload) ? watchmodeSourcesPayload : [];
 
-                        // Availability from the primary catalog is shown only when the
-                        // independent catalog also lists the provider for this exact title.
-                        // Fail closed rather than display unverified services.
-                        enrichedAvailability = availability
-                          .filter(item => nativeByProvider.has(normalizeProviderName(item.providerName)))
-                          .map(item => {
-                            const native = nativeByProvider.get(normalizeProviderName(item.providerName));
-                            return {
-                              ...item,
-                              webUrl: typeof native?.web_url === 'string' ? native.web_url : item.webUrl,
-                              iosUrl: typeof native?.ios_url === 'string' ? native.ios_url : item.iosUrl,
-                              androidUrl: typeof native?.android_url === 'string' ? native.android_url : item.androidUrl,
-                              tvosUrl: typeof native?.tvos_url === 'string' ? native.tvos_url : item.tvosUrl,
-                              androidTvUrl: typeof native?.android_tv_url === 'string' ? native.android_tv_url : item.androidTvUrl,
-                              rokuUrl: typeof native?.roku_url === 'string' ? native.roku_url : item.rokuUrl,
-                            };
-                          });
+                        // Use Watchmode's source list for the exact cross-checked title.
+                        // Intersecting provider names with Movie of the Night hid valid
+                        // options whenever catalogs disagreed (for example Yellowstone).
+                        // Title identity is cross-checked above; provider availability is
+                        // taken from the independent, title-specific source list.
+                        enrichedAvailability = watchmodeSources.map(source => ({
+                          providerId: source.source_id ?? source.id ?? source.name ?? 'watchmode',
+                          providerName: source.name || 'Unknown service',
+                          type: source.type || 'sub',
+                          region: source.region || region,
+                          webUrl: typeof source.web_url === 'string' ? source.web_url : null,
+                          iosUrl: typeof source.ios_url === 'string' ? source.ios_url : null,
+                          androidUrl: typeof source.android_url === 'string' ? source.android_url : null,
+                          tvosUrl: typeof source.tvos_url === 'string' ? source.tvos_url : null,
+                          androidTvUrl: typeof source.android_tv_url === 'string' ? source.android_tv_url : null,
+                          rokuUrl: typeof source.roku_url === 'string' ? source.roku_url : null,
+                          price: source.price ?? null,
+                          format: source.format || null,
+                        }));
                         sourcesCrossChecked = true;
                       }
                     }
