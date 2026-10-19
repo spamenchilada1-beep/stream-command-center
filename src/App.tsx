@@ -282,6 +282,8 @@ function App() {
   });
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
+  const [watchlistSearch, setWatchlistSearch] = useState('');
+  const [watchlistTypeFilter, setWatchlistTypeFilter] = useState<'All' | 'Movie' | 'Series'>('All');
   const [showConnect, setShowConnect] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [showTv, setShowTv] = useState(false);  const [selectedTitle, setSelectedTitle] = useState<SavedTitle | null>(null);
@@ -586,6 +588,14 @@ function App() {
       (category === 'All' || provider.category === category)
     );
   }, [search, category]);
+
+  const filteredWatchlist = useMemo(() => {
+    const query = watchlistSearch.trim().toLowerCase();
+    return watchlist.filter(title =>
+      (!query || `${title.title} ${title.type} ${title.provider}`.toLowerCase().includes(query)) &&
+      (watchlistTypeFilter === 'All' || title.type === watchlistTypeFilter)
+    );
+  }, [watchlist, watchlistSearch, watchlistTypeFilter]);
 
   const connectProvider = (id: string) => {
     const provider = providers.find(item => item.id === id);
@@ -971,7 +981,41 @@ function App() {
               importAckTimerRef.current = window.setTimeout(() => {
                 if (importNonceRef.current === nonce) setImportMessage('Importer diagnostic: no extension bridge acknowledgement was received.');
               }, 3000);
-            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div><div className="mb-5 flex flex-wrap items-center gap-2"><button onClick={handleTraktConnectOrSync} disabled={traktBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] disabled:opacity-50">{traktBusy ? 'Syncing Trakt...' : traktConnected ? 'Sync Trakt' : 'Connect Trakt'}</button>{traktConnected && <button onClick={handleTraktDisconnect} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Disconnect Trakt</button>}{traktHasHiddenTitles && <button onClick={restoreHiddenTraktTitles} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Restore hidden titles</button>}{traktMessage && <p role="status" className="w-full text-xs text-white/45">{traktMessage}</p>}</div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<TitleGrid titles={watchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} />
+            }} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15">Test importer (extension)</button>}</div></div><div className="mb-5 flex flex-wrap items-center gap-2"><button onClick={handleTraktConnectOrSync} disabled={traktBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] disabled:opacity-50">{traktBusy ? 'Syncing Trakt...' : traktConnected ? 'Sync Trakt' : 'Connect Trakt'}</button>{traktConnected && <button onClick={handleTraktDisconnect} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Disconnect Trakt</button>}{traktHasHiddenTitles && <button onClick={restoreHiddenTraktTitles} disabled={traktBusy} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/45 hover:text-white disabled:opacity-50">Restore hidden titles</button>}{traktMessage && <p role="status" className="w-full text-xs text-white/45">{traktMessage}</p>}</div>{ENABLE_TEST_WATCHLIST_IMPORT && importNonce && <div className="mb-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-100/80">Import session active. Scanning your open signed-in streaming services.</div>}{ENABLE_TEST_WATCHLIST_IMPORT && importMessage && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200">{importMessage}</div>}<div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <Search size={17} className="shrink-0 text-white/35" />
+                <input
+                  value={watchlistSearch}
+                  onChange={event => setWatchlistSearch(event.target.value)}
+                  aria-label="Search your watchlist"
+                  placeholder="Search titles or services"
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-white/30"
+                />
+                {watchlistSearch && <button type="button" onClick={() => setWatchlistSearch('')} aria-label="Clear watchlist search" className="text-xs text-white/45 hover:text-white">Clear</button>}
+              </label>
+              <div className="flex gap-2" aria-label="Filter watchlist by type">
+                {(['All', 'Movie', 'Series'] as const).map(filter => (
+                  <button
+                    key={filter}
+                    type="button"
+                    aria-pressed={watchlistTypeFilter === filter}
+                    onClick={() => setWatchlistTypeFilter(filter)}
+                    className={`rounded-full border px-3 py-2 text-xs font-medium transition ${watchlistTypeFilter === filter ? 'border-white bg-white text-black' : 'border-white/10 text-white/55 hover:text-white'}`}
+                  >
+                    {filter === 'All' ? 'All' : filter === 'Movie' ? 'Movies' : 'Series'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="mb-4 text-xs text-white/35">{filteredWatchlist.length} of {watchlist.length} saved {watchlist.length === 1 ? 'title' : 'titles'}</p>
+            {filteredWatchlist.length > 0 ? (
+              <TitleGrid titles={filteredWatchlist} onWatch={sendToTv} onWhereToWatch={openWhereToWatch} onRemove={removeWatchlistTitle} />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
+                <p className="text-sm font-medium text-white/70">{watchlist.length === 0 ? 'Your watchlist is empty' : 'No titles match your search'}</p>
+                <p className="mt-2 text-sm text-white/35">{watchlist.length === 0 ? 'Add a title to keep everything you want to watch in one place.' : 'Try a different title or switch the movie/series filter.'}</p>
+              </div>
+            )}
           </section>}
         </main>
 
