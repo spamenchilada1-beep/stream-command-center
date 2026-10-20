@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stream Command Watchlist Importer",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Securely imports watchlist metadata into Stream Command Center.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9GYu7UUqrgqgG7+VFP1JQok4Nh2i4oHWpdQ/44tNAN7KNM4v5CZDtNuECsZKTg+MbZw4P6ZaiBbdQmfEICaqagL9VfZC4IUgg9/KKiu9s5hN2RW2cFpjraF7gaU+PT7yc6UM6GV8XwkVSlfvkaMct/QWpWY2otY4OUDt1OO6o4RwRIzAj6gEsiJlWwVWlQqLeUobxaHS6+lW7dCMhQICmUiNf5BwcaLMV9CU1nAgINDCxosEwYBz/Mic3UNOP+2Cj3I5RUr/gjV3m7hkT0IVCAhYBds44aDHVMmWmYeHnoVCYNrzjEawl6iBsriZ0dLKPrdjeGq++0LrtafKb7+4HwIDAQAB",
   "permissions": [
@@ -41,6 +41,7 @@
     "https://pluto.tv/*",
     "https://www.roku.com/*",
     "https://www.plex.tv/*",
+    "https://stream.athenawaypoints.com/*",
     "https://stream-command-center-three.vercel.app/*"
   ],
   "background": {
@@ -114,7 +115,9 @@
     },
     {
       "matches": [
-        "https://stream-command-center-three.vercel.app/*"
+        "https://stream.athenawaypoints.com/*",
+        "https://stream-command-center-three.vercel.app/*",
+        "https://stream-command-center-git-fix-strict-availab-d1f6a3-athena-c403.vercel.app/*"
       ],
       "js": [
         "scc-bridge.js"
@@ -124,7 +127,9 @@
   ],
   "externally_connectable": {
     "matches": [
-      "https://stream-command-center-three.vercel.app/*"
+      "https://stream.athenawaypoints.com/*",
+      "https://stream-command-center-three.vercel.app/*",
+      "https://stream-command-center-git-fix-strict-availab-d1f6a3-athena-c403.vercel.app/*"
     ]
   }
 }

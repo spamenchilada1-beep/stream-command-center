@@ -1,11 +1,16 @@
-const SCC_ORIGIN = 'https://stream-command-center-three.vercel.app';
+const SCC_ORIGINS = new Set([
+  'https://stream.athenawaypoints.com',
+  'https://stream-command-center-three.vercel.app',
+  'https://stream-command-center-git-fix-strict-availab-d1f6a3-athena-c403.vercel.app',
+]);
 
 window.addEventListener('message', event => {
-  if (event.source !== window || event.origin !== SCC_ORIGIN) return;
+  if (event.source !== window || !SCC_ORIGINS.has(event.origin)) return;
 
   const message = event.data;
   if (message?.source !== 'stream-command-center' || message?.type !== 'scc:import-start') return;
   if (typeof message.nonce !== 'string' || message.nonce.length < 16) return;
+  const targetOrigin = event.origin;
 
   try {
     chrome.runtime.sendMessage({
@@ -20,7 +25,7 @@ window.addEventListener('message', event => {
           ok: response?.ok === true,
           reason: response?.reason || null,
         },
-        SCC_ORIGIN,
+        targetOrigin,
       );
     }).catch(error => {
       window.postMessage(
@@ -31,7 +36,7 @@ window.addEventListener('message', event => {
           ok: false,
           reason: String(error?.message || error || 'runtime-message-failed'),
         },
-        SCC_ORIGIN,
+        targetOrigin,
       );
     });
   } catch (error) {
@@ -43,7 +48,7 @@ window.addEventListener('message', event => {
         ok: false,
         reason: String(error?.message || error || 'bridge-send-failed'),
       },
-      SCC_ORIGIN,
+      targetOrigin,
     );
   }
 });
@@ -60,6 +65,6 @@ chrome.runtime.onMessage.addListener(message => {
       items: message.items,
       diagnostics: message.diagnostics || null,
     },
-    SCC_ORIGIN,
+    window.location.origin,
   );
 });

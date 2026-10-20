@@ -1,0 +1,30 @@
+name: Availability Handler Tests
+
+on:
+  pull_request:
+    paths:
+      - "api/availability.js"
+      - "tests/availability-handler.test.js"
+      - "package.json"
+      - ".github/workflows/availability-handler-tests.yml"
+  push:
+    branches:
+      - "fix/strict-availability-title-matching"
+    paths:
+      - "api/availability.js"
+      - "tests/availability-handler.test.js"
+      - "package.json"
+      - ".github/workflows/availability-handler-tests.yml"
+
+jobs:
+  availability-handler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run availability regression tests
+        run: npm test

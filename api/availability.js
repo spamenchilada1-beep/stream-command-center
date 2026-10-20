@@ -5,22 +5,77 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function normalizeTitle(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 function normalizeProviderName(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // Treat "Paramount+" and "Paramount Plus" consistently across catalog APIs.
+  return String(value || '').toLowerCase().replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeTitleType(value) {
+  const type = String(value || '').toLowerCase();
+  if (/movie|film/.test(type)) return 'movie';
+  if (/series|show|\btv\b|television/.test(type)) return 'tv';
+  return null;
+}
+
+function normalizeTmdbIdentity(value, inferredType = null) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+  const prefixed = raw.match(/^(movie|tv|series)[\/-](\d+)$/);
+  if (prefixed) {
+    return {
+      id: prefixed[2],
+      type: prefixed[1] === 'movie' ? 'movie' : 'tv',
+    };
+  }
+  const numeric = raw.match(/(\d+)$/);
+  return {
+    id: numeric ? numeric[1] : raw.replace(/[^a-z0-9]/g, ''),
+    type: normalizeTitleType(inferredType),
+  };
 }
 
 function matchesTitleCandidate(candidate, requested) {
-  const candidateName = normalizeProviderName(candidate?.name);
-  const requestedName = normalizeProviderName(requested?.title);
+  const candidateName = normalizeTitle(candidate?.name ?? candidate?.title ?? candidate?.original_title);
+  const requestedName = normalizeTitle(requested?.title);
   if (!candidateName || !requestedName) return false;
 
-  const year = requested?.year ? String(requested.year) : '';
-  const nameMatches = candidateName === requestedName || (year && candidateName === requestedName + year);
-  if (!nameMatches) return false;
+  const candidateType = normalizeTitleType(candidate?.type ?? candidate?.showType ?? candidate?.title_type);
+  const requestedType = normalizeTitleType(requested?.type);
+  if (candidateType && requestedType && candidateType !== requestedType) return false;
 
-  if (requested?.imdbId && candidate?.imdb_id && String(candidate.imdb_id) !== String(requested.imdbId)) return false;
-  if (requested?.tmdbId && candidate?.tmdb_id && String(candidate.tmdb_id) !== String(requested.tmdbId)) return false;
-  if (requested?.year && candidate?.year && Number(candidate.year) !== Number(requested.year)) return false;
+  const requestedImdbId = String(requested?.imdbId || '').trim().toLowerCase();
+  const candidateImdbId = String(candidate?.imdb_id || candidate?.imdbId || '').trim().toLowerCase();
+  const hasBothImdbIds = Boolean(requestedImdbId && candidateImdbId);
+  if (hasBothImdbIds && requestedImdbId !== candidateImdbId) return false;
+  const imdbIdentityMatches = hasBothImdbIds && requestedImdbId === candidateImdbId;
+
+  const requestedTmdb = normalizeTmdbIdentity(requested?.tmdbId, requestedType);
+  const candidateTmdb = normalizeTmdbIdentity(candidate?.tmdb_id ?? candidate?.tmdbId, candidateType);
+  const hasBothTmdbIds = Boolean(requestedTmdb?.id && candidateTmdb?.id);
+  if (hasBothTmdbIds) {
+    if (requestedTmdb.id !== candidateTmdb.id) return false;
+    if (requestedTmdb.type && candidateTmdb.type && requestedTmdb.type !== candidateTmdb.type) return false;
+  }
+  const tmdbIdentityMatches = hasBothTmdbIds;
+
+  // Cross-provider ID matches outrank title punctuation/localized-name differences.
+  // If IDs are absent, require an exact normalized title and don't accept year conflicts.
+  const identityMatches = imdbIdentityMatches || tmdbIdentityMatches;
+  const year = requested?.year != null ? Number(requested.year) : null;
+  const candidateNameMatches = candidateName === requestedName ||
+    (year != null && candidateName === requestedName + String(year));
+  if (!candidateNameMatches && !identityMatches) return false;
+
+  const candidateYearValue = candidate?.year ?? candidate?.release_year ?? candidate?.first_air_year;
+  if (!identityMatches && year != null && candidateYearValue != null && Number(candidateYearValue) !== year) return false;
   return true;
 }
 
@@ -57,21 +112,43 @@ export default async function handler(req, res) {
 
   const title = String(req.query?.title || '').trim();
   const region = String(req.query?.region || 'US').toUpperCase();
+  const catalogId = String(req.query?.catalogId || '').trim();
+  const requestedYearValue = String(req.query?.year || '').trim();
+  const requestedYear = /^\d{4}$/.test(requestedYearValue) ? Number(requestedYearValue) : null;
+  const requestedType = normalizeTitleType(req.query?.type);
+  const requestedImdbId = String(req.query?.imdbId || '').trim() || null;
+  const requestedTmdbId = String(req.query?.tmdbId || '').trim() || null;
   if (!title) return json(res, 400, { error: 'title_required' });
 
   try {
     const motnKey = process.env.MOTN_API_KEY;
     if (motnKey) {
-      const motnSearchUrl = new URL('https://api.movieofthenight.com/v4/shows/search/title');
-      motnSearchUrl.searchParams.set('title', title);
+      const motnSearchUrl = catalogId
+        ? new URL('https://api.movieofthenight.com/v4/shows/' + encodeURIComponent(catalogId))
+        : new URL('https://api.movieofthenight.com/v4/shows/search/title');
+      if (!catalogId) motnSearchUrl.searchParams.set('title', title);
       motnSearchUrl.searchParams.set('country', region.toLowerCase());
       const motnSearchResponse = await fetch(motnSearchUrl, {
         headers: { 'X-API-Key': motnKey, Accept: 'application/json' },
       });
       if (motnSearchResponse.ok) {
         const motnSearchData = await motnSearchResponse.json();
-        const motnResults = Array.isArray(motnSearchData) ? motnSearchData : [];
-        const exact = motnResults.find(item => String(item.title).toLowerCase() === title.toLowerCase()) || motnResults[0];
+        const motnResults = Array.isArray(motnSearchData)
+          ? motnSearchData
+          : motnSearchData && typeof motnSearchData === 'object' ? [motnSearchData] : [];
+        const requestedTitleKey = normalizeTitle(title);
+        const exact = motnResults.find(item =>
+          normalizeTitle(item?.title) === requestedTitleKey &&
+          (!catalogId || String(item?.id) === catalogId) &&
+          (requestedYear == null || item?.firstAirYear == null || Number(item.firstAirYear) === requestedYear) &&
+          (!requestedType || !item?.showType || normalizeTitleType(item.showType) === requestedType) &&
+          (!requestedImdbId || !item?.imdbId || String(item.imdbId).toLowerCase() === requestedImdbId.toLowerCase()) &&
+          (!requestedTmdbId || item?.tmdbId == null || (() => {
+            const requested = normalizeTmdbIdentity(requestedTmdbId, requestedType);
+            const candidate = normalizeTmdbIdentity(item.tmdbId, item.showType);
+            return !requested || !candidate || (requested.id === candidate.id && (!requested.type || !candidate.type || requested.type === candidate.type));
+          })())
+        );
         if (exact?.id) {
           const motnShowUrl = new URL('https://api.movieofthenight.com/v4/shows/' + exact.id);
           motnShowUrl.searchParams.set('country', region.toLowerCase());
@@ -103,6 +180,10 @@ export default async function handler(req, res) {
               };
             });
             if (availability.length) {
+              // Movie of the Night is the primary availability source here. Its
+              // title-specific options stay authoritative; Watchmode is optional
+              // enrichment for native app links and must never veto a valid list or
+              // replace its provider set with a conflicting one.
               let enrichedAvailability = availability;
               if (apiKey) {
                 try {
@@ -116,7 +197,13 @@ export default async function handler(req, res) {
                   if (watchmodeSearchResponse.ok) {
                     const watchmodeSearchData = await watchmodeSearchResponse.json();
                     const watchmodeResults = Array.isArray(watchmodeSearchData.title_results) ? watchmodeSearchData.title_results : [];
-                    const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, { title: exact.title, year: exact.firstAirYear, imdbId: exact.imdbId, tmdbId: exact.tmdbId }));
+                    const watchmodeExact = watchmodeResults.find(item => matchesTitleCandidate(item, {
+                      title: exact.title || title,
+                      year: exact.firstAirYear ?? requestedYear,
+                      type: exact.showType || requestedType,
+                      imdbId: exact.imdbId || requestedImdbId,
+                      tmdbId: exact.tmdbId ?? requestedTmdbId,
+                    }));
                     if (watchmodeExact?.id) {
                       const watchmodeSourcesUrl = new URL(`https://api.watchmode.com/v1/title/${watchmodeExact.id}/sources/`);
                       watchmodeSourcesUrl.searchParams.set('regions', region);
@@ -124,8 +211,11 @@ export default async function handler(req, res) {
                         headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
                       });
                       if (watchmodeSourcesResponse.ok) {
-                        const watchmodeSources = await watchmodeSourcesResponse.json();
-                        const nativeByProvider = new Map((Array.isArray(watchmodeSources) ? watchmodeSources : []).map(source => [normalizeProviderName(source.name), source]));
+                        const watchmodeSourcesPayload = await watchmodeSourcesResponse.json();
+                        const watchmodeSources = Array.isArray(watchmodeSourcesPayload) ? watchmodeSourcesPayload : [];
+                        const nativeByProvider = new Map(
+                          watchmodeSources.map(source => [normalizeProviderName(source.name), source])
+                        );
                         enrichedAvailability = availability.map(item => {
                           const native = nativeByProvider.get(normalizeProviderName(item.providerName));
                           if (!native) return item;
@@ -142,7 +232,8 @@ export default async function handler(req, res) {
                     }
                   }
                 } catch {
-                  // MOTN remains the primary source when native-link enrichment is unavailable.
+                  // Availability is already populated by Movie of the Night;
+                  // optional native-link enrichment failing does not block the list.
                 }
               }
 
@@ -165,6 +256,8 @@ export default async function handler(req, res) {
       }
     }
 
+    if (!apiKey) return json(res, 404, { error: 'title_not_found', title });
+
     const searchUrl = new URL('https://api.watchmode.com/v1/search/');
     searchUrl.searchParams.set('search_field', 'name');
     searchUrl.searchParams.set('search_value', title);
@@ -179,7 +272,13 @@ export default async function handler(req, res) {
 
     const searchData = await searchResponse.json();
     const results = Array.isArray(searchData.title_results) ? searchData.title_results : [];
-    const exact = results.find(item => matchesTitleCandidate(item, { title }));
+    const exact = results.find(item => matchesTitleCandidate(item, {
+      title,
+      year: requestedYear,
+      type: requestedType,
+      imdbId: requestedImdbId,
+      tmdbId: requestedTmdbId,
+    }));
 
     if (!exact?.id) return json(res, 404, { error: 'title_not_found', title });
 

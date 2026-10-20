@@ -186,8 +186,12 @@ async function exchangeCode(idToken, uid, body) {
   if (!body.code || !body.codeVerifier) throw new Error('Trakt authorization response is incomplete.');
   const response = await fetch(TRAKT_AUTH + '/oauth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+      'User-Agent': 'StreamCommandCenter/1.0 (+https://stream.athenawaypoints.com)',
+    },
+    body: new URLSearchParams({
       code: body.code,
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -206,8 +210,12 @@ async function exchangeCode(idToken, uid, body) {
 async function refreshTokens(idToken, uid, tokens) {
   const response = await fetch(TRAKT_AUTH + '/oauth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+      'User-Agent': 'StreamCommandCenter/1.0 (+https://stream.athenawaypoints.com)',
+    },
+    body: new URLSearchParams({
       refresh_token: tokens.refreshToken,
       client_id: getTraktClientId(),
       redirect_uri: tokens.redirectUri,
@@ -239,6 +247,7 @@ async function traktGet(url, idToken, uid, tokens, retried = false) {
   const response = await fetch(url, {
     headers: {
       Accept: 'application/json',
+      'User-Agent': 'StreamCommandCenter/1.0 (+https://stream.athenawaypoints.com)',
       Authorization: 'Bearer ' + tokens.accessToken,
       'trakt-api-version': '2',
       'trakt-api-key': getTraktClientId(),
